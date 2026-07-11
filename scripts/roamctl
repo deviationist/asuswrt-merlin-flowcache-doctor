@@ -28,5 +28,14 @@ case "$1" in
   watchdog) [ "$(policy)" = "on" ] || exit 0
             [ -f "$FLAG" ] && exit 0
             [ -n "$(pids)" ] || { logger -t "$TAG" "watchdog: daemon not running, restarting"; "$DAEMON" >/dev/null 2>&1 & } ;;
-  *)        echo "usage: roamctl start|stop|restart|status|log|watchdog|boot|policy [on|off]" ;;
+  uninstall) for p in $(pids); do kill "$p"; done
+            cru d roam-detect-wd 2>/dev/null
+            SS=/jffs/scripts/services-start
+            [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"
+            rm -f "$DAEMON" "$POLICY" "$FLAG"
+            rm -rf /tmp/roam-detect
+            logger -t "$TAG" "uninstalled"
+            echo "flowcache-doctor uninstalled."
+            rm -f "$0" ;;
+  *)        echo "usage: roamctl start|stop|restart|status|log|watchdog|boot|policy [on|off]|uninstall" ;;
 esac

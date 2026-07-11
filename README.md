@@ -174,7 +174,22 @@ one).
 
 ## Install
 
-One command, run on the router over that SSH session:
+### Guided setup (easiest — run on your computer, not the router)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/deviationist/asuswrt-merlin-flowcache-doctor/main/setup.sh | sh
+```
+
+It asks for your router's address and SSH username (ssh itself prompts for
+the password if you haven't set up keys), verifies the router is ready
+(JFFS scripts enabled), detects whether flowcache-doctor is already
+installed, and offers the right action: install, reinstall/repair,
+uninstall, or just showing recent detections. Safe to run any number of
+times.
+
+### Direct install (run on the router)
+
+One command, over an SSH session on the router itself:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/deviationist/asuswrt-merlin-flowcache-doctor/main/install.sh | sh
@@ -183,11 +198,42 @@ curl -fsSL https://raw.githubusercontent.com/deviationist/asuswrt-merlin-flowcac
 The installer verifies JFFS scripts are enabled, fetches the two scripts into
 `/jffs/scripts/`, wires the boot hook and the once-a-minute crash watchdog
 into `services-start` + cron (idempotently — safe to re-run), and starts the
-daemon. Uninstalling is just as clean:
+daemon.
+
+## Uninstall
+
+Just as clean, three equivalent ways:
 
 ```sh
+# offline, right on the router (no internet needed):
+/jffs/scripts/roamctl uninstall
+
+# or the dedicated script:
+curl -fsSL https://raw.githubusercontent.com/deviationist/asuswrt-merlin-flowcache-doctor/main/uninstall.sh | sh
+
+# or via the installer:
 curl -fsSL https://raw.githubusercontent.com/deviationist/asuswrt-merlin-flowcache-doctor/main/install.sh | sh -s uninstall
 ```
+
+All of them stop the daemon, remove both scripts, the cron watchdog, the
+`services-start` hooks, the policy file, and runtime state — and nothing
+else.
+
+## Will this become unnecessary? Hopefully!
+
+Yes, ideally. The real fix has to come from Broadcom, shipped inside an ASUS
+GPL update, merged into a firmware release. ASUS is reportedly aware. When
+that happens, this tool becomes redundant — by design, it's a stopgap, not a
+permanent fixture.
+
+How you'll know: after a firmware upgrade, watch `roamctl log` — if weeks of
+roaming produce no `STALE-FDB` lines (where they used to appear), the driver
+is likely fixed. The detector doubles as your regression test. Wi-Fi fixes
+are rarely mentioned in changelogs (they arrive silently inside GPL blob
+merges), so the log is more trustworthy than the release notes.
+
+Until confirmed fixed, the tool is cheap insurance: one idle shell loop, logs
+only on real events, and uninstalls in one command.
 
 If your SSIDs don't live on `wl0.1`/`wl1.1`/`wl2.1` (varies by model and
 config — list bridge members with `ls /sys/class/net/br0/brif/`), edit

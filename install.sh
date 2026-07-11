@@ -40,11 +40,11 @@ for f in roam-detect.sh roamctl; do
   else
     curl -fsSL "$REPO_RAW/scripts/$f" -o "$DEST/$f" || fail "download of $f failed"
   fi
-  chmod a+rx "$DEST/$f"
+  chmod 755 "$DEST/$f"
 done
 
 # Boot hook + watchdog (idempotent)
-if [ ! -f "$SS" ]; then printf '#!/bin/sh\n' > "$SS"; chmod a+rx "$SS"; fi
+if [ ! -f "$SS" ]; then printf '#!/bin/sh\n' > "$SS"; chmod 755 "$SS"; fi
 grep -q "roamctl boot" "$SS" || echo "$DEST/roamctl boot" >> "$SS"
 grep -q "$CRU_ID" "$SS" || echo "cru a $CRU_ID \"* * * * * $DEST/roamctl watchdog\"" >> "$SS"
 

@@ -34,6 +34,7 @@ model, please open an issue with your model + firmware.
 | *"Is this my problem?"* — how the bug feels in daily life | [In plain words](#in-plain-words--what-this-bug-feels-like) |
 | The technical symptom fingerprint | [Symptoms](#symptoms--how-to-recognize-this-bug-technical) |
 | Proof in one command (doubles as the temporary fix) | [Quick self-test](#quick-self-test--confirm-you-have-this-bug-in-one-command) |
+| Background: what a flow cache is and why it exists | [What is a flow cache, anyway?](#what-is-a-flow-cache-anyway) |
 | The root-cause deep dive | [What's actually broken](#whats-actually-broken) |
 | The permanent fix: install the doctor | [Setup](#setup-ssh-access-to-your-router) → [Install](#install) |
 | Similar cases across models | [Similar reports](#similar-reports-in-the-wild) |
@@ -107,6 +108,35 @@ offenders should then install the doctor so this happens automatically.
 
 On older firmware the binary may be exposed as `fc` (`fc flush`) — same
 tool; `fc` is a symlink to `fcctl`.
+
+## What is a flow cache, anyway?
+
+Consumer routers advertise multi-gigabit Wi-Fi and WAN speeds, but their ARM
+SoCs are far too slow to push that through the full Linux network stack —
+bridging, FDB/ARP lookups, netfilter/NAT, routing cost thousands of CPU
+cycles *per packet*. At Wi-Fi 7 / 2.5 GbE rates that's simply impossible in
+software.
+
+So chip vendors bolt on a **fast path**. The first packet of any new flow
+(a connection, roughly: src/dst MAC + IP + port) traverses the full kernel
+stack the slow, correct way. The flow engine watches the result and records
+it as a flow entry — essentially *"packets matching this signature: apply
+these header rewrites, send out this interface"* — where the egress can be a
+specific ethernet port or a specific Wi-Fi radio. Every subsequent packet of
+that flow matches the entry and gets forwarded directly, skipping the kernel
+entirely. On the RT-BE92U's BCM6765 this stack is `fcache` (software flow
+table) → Archer (software accelerator) → Crossbow (full hardware offload);
+other Broadcom SoCs use a sibling called Runner. That skip is what buys the
+advertised throughput — and it's why disabling the flow cache entirely (a
+legitimate workaround, see below) costs peak speed.
+
+The property that matters for this bug: **once an entry exists, the fast
+path never re-consults the kernel's bridge or ARP tables.** Not consulting
+them is the entire point — every consultation avoided is the saving. The
+kernel can know the truth perfectly (it does — we verified it live) while
+the fast path keeps executing a decision cached from a world that no longer
+exists. A cache without a working invalidation story is a time bomb; the
+next section is about the invalidation story breaking.
 
 ## What's actually broken
 

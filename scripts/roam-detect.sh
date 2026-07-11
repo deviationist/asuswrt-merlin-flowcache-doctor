@@ -25,12 +25,20 @@ logger -t "$TAG" "starting (pid $$, interval ${INTERVAL}s, bss: $BSSLIST, autofl
 port_of() { printf '%d' "$(cat /sys/class/net/br0/brif/$1/port_no 2>/dev/null)" 2>/dev/null; }
 
 # Rate-limited per-MAC flush (or announcement, when auto-flush is off).
-heal() { # $1 = mac, $2 = reason
+# Band-aware cooldown: a roam onto a DIFFERENT radio than the last flush
+# bypasses the cooldown (the settle-roam after a storm must always heal),
+# while repeat flushes on the same radio are rate-limited. MIN_GAP is a hard
+# floor so rapid back-and-forth flapping can't turn the bypass into a storm.
+MIN_GAP=8
+heal() { # $1 = mac, $2 = reason, $3 = current bss
   now=$(date +%s)
-  lf="$STATE/$(echo "$1" | tr -d :).lastflush"
+  key=$(echo "$1" | tr -d :)
+  lf="$STATE/$key.lastflush"; lb="$STATE/$key.lastflushbss"
   last=0; [ -f "$lf" ] && last=$(cat "$lf")
-  [ $((now - last)) -lt "$COOLDOWN" ] && return 0
-  echo "$now" > "$lf"
+  lastbss=""; [ -f "$lb" ] && lastbss=$(cat "$lb")
+  [ $((now - last)) -lt "$MIN_GAP" ] && return 0
+  [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ] && return 0
+  echo "$now" > "$lf"; echo "$3" > "$lb"
   if [ -f "$FLUSHFLAG" ]; then
     fcctl flush --mac "$1" >/dev/null 2>&1
     logger -t "$TAG" "FLUSHED $1 ($2)"
@@ -69,7 +77,7 @@ while true; do
 
     if [ -n "$prev_bss" ] && [ "$prev_bss" != "$bss" ]; then
       logger -t "$TAG" "ROAM $mac $prev_bss -> $bss"
-      heal "$mac" "roam $prev_bss->$bss"
+      heal "$mac" "roam $prev_bss->$bss" "$bss"
     fi
 
     fport=$(echo "$FDB" | awk -v m="$mac" 'tolower($2)==m && $3=="no" {print $1; exit}')
@@ -79,7 +87,7 @@ while true; do
           # persisted for 2+ passes -> real stale binding, not a transient
           [ "$prev_status" = "STALE1:$fport" ] && logger -t "$TAG" "STALE-FDB $mac assoc=$bss(port $bport) fdb=port $fport (persistent)"
           status="STALE2:$fport"
-          heal "$mac" "stale-fdb port $fport" ;;   # cooldown gates retries
+          heal "$mac" "stale-fdb port $fport" "$bss" ;;   # cooldown gates retries
         *) status="STALE1:$fport" ;;               # first sighting: wait one pass
       esac
     else

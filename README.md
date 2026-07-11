@@ -18,7 +18,30 @@ likely affects **other Broadcom-based Asus routers** too — the Wi-Fi 7 BE-seri
 same failure shape exist for AX-era models. If you see the symptoms below on
 another model, please open an issue with your model + firmware version.
 
-## Symptoms — how to recognize this bug
+## In plain words — what this bug feels like
+
+You're on Wi-Fi, full bars, internet works fine. But suddenly **one** device
+on your network is gone: your NAS won't open, Plex won't load, your smart-home
+dashboard times out, you can't reach the printer. Everything *else* still
+works — which makes it maddening. You reboot your laptop: nothing. You forget
+and rejoin Wi-Fi: nothing. You start blaming the NAS, reboot *it*, reinstall
+apps, check cables — nothing, because the NAS was never the problem. Then at
+some point you reboot the router and everything magically works again… until
+a few days later, when it happens again. Usually right after you carried your
+laptop or phone to another room.
+
+That's this bug. Your router's Wi-Fi chip has a bookkeeping error: when your
+device hops between Wi-Fi bands (which it does silently as you move around),
+the chip sometimes keeps delivering that device's traffic to where you *used*
+to be. The affected connection is then a black hole — and the chip actively
+refuses to notice. Nothing you do on your laptop or your NAS can fix it,
+because the broken state lives inside the router.
+
+The good news: it can be fixed in one second, without a reboot, by telling
+the router to forget its bad bookkeeping (`fcctl flush`). This project makes
+the router detect the situation and do exactly that, automatically.
+
+## Symptoms — how to recognize this bug (technical)
 
 After a Wi-Fi client roams between bands (e.g. 5 GHz ↔ 6 GHz under Smart
 Connect), typically **20 seconds to 3 minutes later**:

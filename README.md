@@ -1,9 +1,15 @@
 # asuswrt-merlin-flowcache-doctor
 
 **Detects (and will soon auto-heal) the Broadcom flow-cache roam blackhole on
-Asus routers running [Asuswrt-Merlin](https://www.asuswrt-merlin.net/): a Wi-Fi
-client roams between bands, and traffic between that client and *specific* LAN
-hosts silently dies until the router's flow cache is flushed.**
+Broadcom-based Asus routers: a Wi-Fi client roams between bands, and traffic
+between that client and *specific* LAN hosts silently dies until the router's
+flow cache is flushed.**
+
+The bug is in Broadcom's driver, not in any firmware's own code — **stock
+AsusWRT and [Asuswrt-Merlin](https://www.asuswrt-merlin.net/) are equally
+affected** (Merlin ships the Wi-Fi stack unmodified from Asus's GPL drops).
+Merlin is simply where the *fix* can live, since only Merlin lets you run
+user scripts on the router — see *Requirements*.
 
 Developed and validated live on an **RT-BE92U** (BCM6765, Merlin 3006.102.8).
 The underlying bug lives in Broadcom's closed-source driver blobs, so it very
@@ -94,14 +100,56 @@ immediately). Also planned: event-driven detection via `wlceventd`
 (`nvram set wlceventd_msglevel=1` surfaces per-assoc syslog events), which
 closes the polling detector's known blind spots (see *Limitations*).
 
+## Setup: SSH access to your router
+
+After installing Asuswrt-Merlin, log in to the web UI and go to
+**Administration → System**:
+
+1. Set **Enable JFFS custom scripts and configs** to **Yes**.
+2. Set **Enable SSH** to **LAN only** (resist "LAN + WAN" unless you really
+   know what you're doing — WAN-exposed SSH on a router is asking for
+   trouble).
+3. Strongly consider pasting your workstation's **public key** into
+   *Authorized Keys* and setting *Allow SSH password login* to **No**.
+4. Hit **Apply**. (If JFFS scripts were off, a reboot may be needed.)
+
+Then from your workstation:
+
+```sh
+ssh <router-username>@<router-ip>
+```
+
+using the same username/password as the web UI (or your key, if you added
+one).
+
 ## Install
+
+One command, run on the router over that SSH session:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/deviationist/asuswrt-merlin-flowcache-doctor/main/install.sh | sh
+```
+
+The installer verifies JFFS scripts are enabled, fetches the two scripts into
+`/jffs/scripts/`, wires the boot hook and the once-a-minute crash watchdog
+into `services-start` + cron (idempotently — safe to re-run), and starts the
+daemon. Uninstalling is just as clean:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/deviationist/asuswrt-merlin-flowcache-doctor/main/install.sh | sh -s uninstall
+```
+
+If your SSIDs don't live on `wl0.1`/`wl1.1`/`wl2.1` (varies by model and
+config — list bridge members with `ls /sys/class/net/br0/brif/`), edit
+`BSSLIST` at the top of `/jffs/scripts/roam-detect.sh` after installing.
+
+<details>
+<summary>Manual install (no curl-pipe-sh)</summary>
 
 ```sh
 scp scripts/roam-detect.sh scripts/roamctl router:/jffs/scripts/
 ssh router
   chmod a+rx /jffs/scripts/roam-detect.sh /jffs/scripts/roamctl
-  # edit BSSLIST in roam-detect.sh if your SSIDs use different BSS interfaces
-  # (check: ls /sys/class/net/br0/brif/)
   cat >> /jffs/scripts/services-start <<'EOF'
 /jffs/scripts/roamctl boot
 cru a roam-detect-wd "* * * * * /jffs/scripts/roamctl watchdog"
@@ -110,6 +158,7 @@ EOF
   /jffs/scripts/roamctl start
   cru a roam-detect-wd "* * * * * /jffs/scripts/roamctl watchdog"
 ```
+</details>
 
 ## Usage
 

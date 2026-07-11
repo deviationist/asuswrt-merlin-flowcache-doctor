@@ -1,5 +1,9 @@
 # asuswrt-merlin-flowcache-doctor
 
+> **Not a technical person?** No problem — skip ahead to
+> [what this bug feels like in daily life](#in-plain-words--what-this-bug-feels-like),
+> written for humans, not network engineers.
+
 Broadcom-based ASUS routers accelerate LAN traffic through a per-flow cache
 instead of running every packet through the kernel. When a Wi-Fi client roams
 between bands (5 GHz ↔ 6 GHz under Smart Connect), a race in Broadcom's

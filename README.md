@@ -1,6 +1,6 @@
 # asuswrt-merlin-flowcache-doctor
 
-Broadcom-based Asus routers accelerate LAN traffic through a per-flow cache
+Broadcom-based ASUS routers accelerate LAN traffic through a per-flow cache
 instead of running every packet through the kernel. When a Wi-Fi client roams
 between bands (5 GHz ↔ 6 GHz under Smart Connect), a race in Broadcom's
 closed-source driver can leave that client's cached forwarding entries pinned
@@ -8,7 +8,7 @@ to the radio it just left — and an inverted aging check keeps the stale
 entries alive indefinitely. The result: traffic between that client and
 *specific* LAN hosts silently blackholes — brand-new connections included —
 until the router's flow cache is flushed. The bug lives in Broadcom's driver
-blobs, so **stock AsusWRT and [Asuswrt-Merlin](https://www.asuswrt-merlin.net/)
+blobs, so **stock ASUSWRT and [Asuswrt-Merlin](https://www.asuswrt-merlin.net/)
 are equally affected**, and no firmware fix exists as of Merlin 3006.102.8.
 
 **This repo is the doctor.** A tiny supervised daemon for Asuswrt-Merlin
@@ -127,12 +127,12 @@ GPL blob merge. Until then: this project.
 
 **[Asuswrt-Merlin](https://www.asuswrt-merlin.net/) is required.** The fix
 depends on Merlin's user-script hooks (`/jffs/scripts/`, `services-start`),
-which stock AsusWRT does not offer — stock firmware gives you no sanctioned
+which stock ASUSWRT does not offer — stock firmware gives you no sanctioned
 way to run anything at boot.
 
-The bug itself affects stock AsusWRT just the same (same Broadcom blobs). If
+The bug itself affects stock ASUSWRT just the same (same Broadcom blobs). If
 you're on stock, your options are rebooting the router whenever it happens —
-or switching to Merlin, which we'd encourage anyway: same Asus UI and feature
+or switching to Merlin, which we'd encourage anyway: same ASUS UI and feature
 set, plus user scripts, better VPN support, proper cron (`cru`), Entware
 support, and an actively maintained changelog. This tool is one more reason.
 
@@ -374,7 +374,7 @@ the top first. Then consider posting your capture in the
 
 ## Similar reports in the wild
 
-The roam→blackhole family shows up across Asus Broadcom models and firmware
+The roam→blackhole family shows up across ASUS Broadcom models and firmware
 generations — usually without the flow-cache connection being made:
 
 - [SNB: RT-BE92U New Merlin Firmware (p.3)](https://www.snbforums.com/threads/rt-be92u-new-merlin-firmware.94409/page-3)

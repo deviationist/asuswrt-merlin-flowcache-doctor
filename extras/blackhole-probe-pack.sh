@@ -8,7 +8,7 @@
 # as a control vantage point).
 #
 # CONFIG — set these for your network:
-ROUTER="${ROUTER:-router}"            # ssh alias or user@ip of the router
+ROUTER="${ROUTER:-admin@192.168.1.1}"  # user@ip (or ssh alias) of the router
 VICTIM_MAC="${VICTIM_MAC:-aa:bb:cc:dd:ee:ff}"  # this client's Wi-Fi MAC
 TARGET_IP="${TARGET_IP:-192.168.1.10}"         # the unreachable LAN host
 CONTROL_IP="${CONTROL_IP:-192.168.1.11}"       # a host that still works (optional)

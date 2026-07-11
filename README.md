@@ -364,10 +364,10 @@ Supervision model (systemd-ish, with busybox means):
 ## Manual fix, when it strikes
 
 ```sh
-ssh router 'fcctl flush --mac <client-mac>'  # surgical — proven sufficient
-ssh router 'fcctl flush --if <bss>'          # one radio
-ssh router 'fcctl flush'                     # everything (the classic cure)
-ssh router 'fcctl flush --hw'                # include HW accelerator entries
+ssh <user>@<router-ip> 'fcctl flush --mac <client-mac>'  # surgical — proven sufficient
+ssh <user>@<router-ip> 'fcctl flush --if <bss>'          # one radio
+ssh <user>@<router-ip> 'fcctl flush'                     # everything (the classic cure)
+ssh <user>@<router-ip> 'fcctl flush --hw'                # include HW accelerator entries
 ```
 
 (`fc` is a symlink to `fcctl`; prefer `fcctl` — `fc` collides with a shell

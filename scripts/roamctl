@@ -7,9 +7,20 @@ DAEMON=/jffs/scripts/roam-detect.sh
 TAG=roam-detect
 FLAG=/tmp/roam-detect.disabled           # runtime manual-stop flag (cleared by start/reboot)
 POLICY=/jffs/scripts/roam-detect.policy  # persistent policy: "on" (default if absent) or "off"
+FLUSHFLAG=/jffs/scripts/roam-detect.flush # exists => auto-flush enabled (persistent)
 
-# busybox on these routers has no pgrep/pkill — use ps+awk
-pids() { ps w | grep "[r]oam-detect.sh" | awk '{print $1}'; }
+# busybox on these routers has no pgrep/pkill. A naive `ps | grep` also
+# matches the *calling* SSH session if its command line mentions the daemon
+# path (restart would then kill the caller's connection) — so: pidfile first,
+# with the daemon's distinctive "{roam-detect.sh}" ps form as orphan fallback.
+PIDFILE=/tmp/roam-detect.pid
+pids() {
+  if [ -f "$PIDFILE" ]; then
+    p=$(cat "$PIDFILE")
+    grep -q "roam-detect.sh" "/proc/$p/cmdline" 2>/dev/null && { echo "$p"; return; }
+  fi
+  ps w | grep "{[r]oam-detect.sh}" | awk '{print $1}'
+}
 policy() { [ -f "$POLICY" ] && cat "$POLICY" || echo on; }
 
 case "$1" in
@@ -17,11 +28,18 @@ case "$1" in
   stop)     touch "$FLAG"; for p in $(pids); do kill "$p"; done
             logger -t "$TAG" "stopped manually (watchdog disarmed until 'roamctl start' or reboot)" ;;
   restart)  for p in $(pids); do kill "$p"; done; sleep 1; rm -f "$FLAG"; "$DAEMON" >/dev/null 2>&1 & ;;
-  status)   echo "policy: $(policy)"; ps w | grep "[r]oam-detect.sh" || echo "not running$([ -f $FLAG ] && echo ' (manually stopped)')" ;;
+  status)   echo "policy: $(policy)"; echo "autoflush: $([ -f "$FLUSHFLAG" ] && echo on || echo off)"
+            p=$(pids)
+            if [ -n "$p" ]; then echo "running (pid $p)"; else echo "not running$([ -f $FLAG ] && echo ' (manually stopped)')"; fi ;;
   log)      grep "$TAG" /tmp/syslog.log | tail -30 ;;
   policy)   case "$2" in
               on|off) echo "$2" > "$POLICY"; logger -t "$TAG" "restart policy set to $2"; echo "policy: $2" ;;
               *) echo "policy: $(policy)" ;;
+            esac ;;
+  flush)    case "$2" in
+              on)  touch "$FLUSHFLAG"; logger -t "$TAG" "auto-flush ENABLED (per-MAC, rate-limited)"; echo "autoflush: on" ;;
+              off) rm -f "$FLUSHFLAG"; logger -t "$TAG" "auto-flush disabled (log-only)"; echo "autoflush: off" ;;
+              *)   echo "autoflush: $([ -f "$FLUSHFLAG" ] && echo on || echo off)" ;;
             esac ;;
   boot)     [ "$(policy)" = "on" ] || exit 0
             [ -n "$(pids)" ] || "$DAEMON" >/dev/null 2>&1 & ;;
@@ -32,10 +50,10 @@ case "$1" in
             cru d roam-detect-wd 2>/dev/null
             SS=/jffs/scripts/services-start
             [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"
-            rm -f "$DAEMON" "$POLICY" "$FLAG"
+            rm -f "$DAEMON" "$POLICY" "$FLAG" "$FLUSHFLAG"
             rm -rf /tmp/roam-detect
             logger -t "$TAG" "uninstalled"
             echo "flowcache-doctor uninstalled."
             rm -f "$0" ;;
-  *)        echo "usage: roamctl start|stop|restart|status|log|watchdog|boot|policy [on|off]|uninstall" ;;
+  *)        echo "usage: roamctl start|stop|restart|status|log|watchdog|boot|policy [on|off]|flush [on|off]|uninstall" ;;
 esac

@@ -18,10 +18,12 @@ are equally affected**, and no firmware fix exists as of Merlin 3006.102.8.
 **This repo is the doctor.** A tiny supervised daemon for Asuswrt-Merlin
 (Merlin is required — only it can run user scripts; see *Requirements*) that
 watches every Wi-Fi client for roams and the resulting stale forwarding
-state, logs the evidence, and — phase 2, coming — flushes the affected
-client's flow entries the moment it happens: the exact invalidation the
-driver misses. Plus the diagnostics to confirm you're hitting this bug at
-all. Developed and validated live on an **RT-BE92U** (BCM6765, Merlin
+state, logs the evidence, and — opt-in — heals it automatically: a surgical
+`fcctl flush --mac` of just the affected client, the exact invalidation the
+driver misses. Never a global flush, rate-limited per client. Plus the
+diagnostics to confirm you're hitting this bug at all, and a bundled
+[Claude Code skill](#claude-code-skill) for AI-assisted diagnosis.
+Developed and validated live on an **RT-BE92U** (BCM6765, Merlin
 3006.102.8); the Wi-Fi 7 BE-series shares the same SDK and AX-era ancestors
 of the bug are on record, so if you match
 [the symptoms](#symptoms--how-to-recognize-this-bug-technical) on another
@@ -175,7 +177,7 @@ Also required: SSH access to the router (Administration → System → Enable
 SSH) and **JFFS custom scripts** enabled (Administration → System → Enable
 JFFS custom scripts and configs = Yes).
 
-## What it does today (phase 1 — detect & log)
+## What it does
 
 A small daemon (`roam-detect.sh`) iterates every 2 s and compares, for every
 associated Wi-Fi client:
@@ -189,16 +191,34 @@ It logs to the router's syslog (tag `roam-detect`):
 
 ```
 roam-detect: ROAM aa:bb:cc:dd:ee:ff wl1.1 -> wl2.1
-roam-detect: STALE-FDB aa:bb:cc:dd:ee:ff assoc=wl1.1(port 6) fdb=port 8 <- WOULD FLUSH: fcctl flush --mac aa:bb:cc:dd:ee:ff
+roam-detect: STALE-FDB aa:bb:cc:dd:ee:ff assoc=wl1.1(port 6) fdb=port 8 (persistent)
+roam-detect: FLUSHED aa:bb:cc:dd:ee:ff (roam wl1.1->wl2.1)
 roam-detect: RECOVERED aa:bb:cc:dd:ee:ff fdb now matches wl1.1
 ```
 
-Phase 2 (planned, opt-in): actually run the `fcctl flush --mac` it currently
-only logs — the exact per-client invalidation the driver fails to do, with
-zero impact on other clients (flows re-learn through the correct path
-immediately). Also planned: event-driven detection via `wlceventd`
-(`nvram set wlceventd_msglevel=1` surfaces per-assoc syslog events), which
-closes the polling detector's known blind spots (see *Limitations*).
+**Auto-heal (opt-in):** enable with `roamctl flush on`. On every detected
+roam — and on any stale binding that persists across two passes — the daemon
+runs `fcctl flush --mac <that client>`: strictly per-client (never a global
+flush), rate-limited to one flush per client per 60 s, harmless by
+construction (that client's flows re-learn through the correct slow path
+within a second). Until you opt in, it only logs `WOULD FLUSH` lines so you
+can audit what it *would* have done. Clients transiently listed on two
+radios at once (a driver artifact during steering churn) are parked in a
+`DUAL` state and left alone until they settle.
+
+Planned next: event-driven detection via `wlceventd` to close the polling
+detector's known blind spots (see *Limitations*) — initial attempts to
+surface its events via `wlceventd_msglevel` haven't produced output on
+3006.102.8 yet; investigation notes welcome.
+
+## Claude Code skill
+
+The repo ships a [Claude Code](https://claude.com/claude-code) skill at
+`.claude/skills/flowcache-doctor/`. Clone the repo, open Claude Code in it,
+and ask something like *"my NAS is unreachable from my laptop but works from
+everything else — is this the flow-cache bug?"* — Claude walks the full
+triage: symptom checks, the ARP/ping/traceroute anatomy, router-side proof,
+the decisive per-MAC flush test, and (if confirmed) installing this fix.
 
 ## Setup: SSH access to your router
 
@@ -343,13 +363,20 @@ by any of the uninstall paths:
 ## Usage
 
 ```
-roamctl status          # running? current policy?
+roamctl status          # running? policy? auto-flush?
 roamctl log             # last 30 detection events (from syslog)
+roamctl flush on|off    # enable/disable auto-heal (persistent; default off)
 roamctl stop            # stop + disarm watchdog (until start or reboot)
 roamctl start           # start + re-arm watchdog
 roamctl restart         # bounce the daemon
 roamctl policy off|on   # persistent master switch (survives reboots)
+roamctl uninstall       # remove everything, offline
 ```
+
+Note: the repo also works checked out **on the router itself** — routers
+have no git, so fetch a tarball (`curl -L <repo>/archive/refs/heads/main.tar.gz`),
+extract, and run `sh install.sh` from the directory; it prefers local files
+over downloading.
 
 Supervision model (systemd-ish, with busybox means):
 

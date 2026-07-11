@@ -23,8 +23,9 @@ client's flow entries the moment it happens: the exact invalidation the
 driver misses. Plus the diagnostics to confirm you're hitting this bug at
 all. Developed and validated live on an **RT-BE92U** (BCM6765, Merlin
 3006.102.8); the Wi-Fi 7 BE-series shares the same SDK and AX-era ancestors
-of the bug are on record, so if you match the symptoms on another model,
-please open an issue with your model + firmware.
+of the bug are on record, so if you match
+[the symptoms](#symptoms--how-to-recognize-this-bug-technical) on another
+model, please open an issue with your model + firmware.
 
 ## Start here
 

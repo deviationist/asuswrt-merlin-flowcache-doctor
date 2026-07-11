@@ -378,6 +378,24 @@ have no git, so fetch a tarball (`curl -L <repo>/archive/refs/heads/main.tar.gz`
 extract, and run `sh install.sh` from the directory; it prefers local files
 over downloading.
 
+### Tuning (optional config file)
+
+Create `/jffs/scripts/roam-detect.conf` to override the defaults — it's
+plain shell sourced by the daemon, it survives updates and reinstalls (the
+installer never touches it), and all uninstall paths remove it:
+
+```sh
+# /jffs/scripts/roam-detect.conf — all optional
+BSSLIST="wl0.1 wl1.1 wl2.1"  # your SSID-carrying BSS interfaces (varies by model!)
+INTERVAL=2                   # seconds between detection passes
+COOLDOWN=60                  # min seconds between flushes per client (same radio)
+MIN_GAP=8                    # hard floor between flushes per client (any radio)
+```
+
+Restart after editing: `/jffs/scripts/roamctl restart`. `BSSLIST` is the one
+most people need (per-model interface names); the timing knobs are for the
+curious — the defaults are deliberately conservative.
+
 Supervision model (systemd-ish, with busybox means):
 
 | systemd | here |

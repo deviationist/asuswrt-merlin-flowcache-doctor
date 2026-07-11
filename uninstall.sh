@@ -17,7 +17,7 @@ for p in $(ps w | grep "[r]oam-detect.sh" | awk '{print $1}'); do kill "$p"; don
 
 cru d "$CRU_ID" 2>/dev/null
 [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"
-rm -f "$DEST/roam-detect.sh" "$DEST/roamctl" "$DEST/roam-detect.policy" "$DEST/roam-detect.flush" /tmp/roam-detect.disabled
+rm -f "$DEST/roam-detect.sh" "$DEST/roamctl" "$DEST/roam-detect.policy" "$DEST/roam-detect.flush" "$DEST/roam-detect.conf" /tmp/roam-detect.disabled
 rm -rf /tmp/roam-detect
 
 logger -t roam-detect "uninstalled" 2>/dev/null

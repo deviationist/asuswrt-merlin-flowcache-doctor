@@ -50,7 +50,7 @@ case "$1" in
             cru d roam-detect-wd 2>/dev/null
             SS=/jffs/scripts/services-start
             [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"
-            rm -f "$DAEMON" "$POLICY" "$FLAG" "$FLUSHFLAG"
+            rm -f "$DAEMON" "$POLICY" "$FLAG" "$FLUSHFLAG" /jffs/scripts/roam-detect.conf
             rm -rf /tmp/roam-detect
             logger -t "$TAG" "uninstalled"
             echo "flowcache-doctor uninstalled."

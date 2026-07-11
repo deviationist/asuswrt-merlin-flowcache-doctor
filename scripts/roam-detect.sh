@@ -9,14 +9,19 @@
 # Truth  = wl -i <bss> assoclist  (which radio the client is really on)
 # Belief = brctl showmacs br0     (which bridge port the forwarding layer uses)
 #
-# CONFIG — adjust for your model. BSSLIST must name the bridge-member BSS
-# interfaces your SSIDs actually use (check: ls /sys/class/net/br0/brif/).
+# DEFAULTS — override in /jffs/scripts/roam-detect.conf (survives updates
+# and reinstalls; the installer never touches it). BSSLIST must name the
+# bridge-member BSS interfaces your SSIDs actually use
+# (check: ls /sys/class/net/br0/brif/).
 BSSLIST="wl0.1 wl1.1 wl2.1"
-INTERVAL=2
-COOLDOWN=60                                  # min seconds between flushes per client
+INTERVAL=2      # seconds between detection passes
+COOLDOWN=60     # min seconds between flushes per client (same radio)
+MIN_GAP=8       # hard floor between flushes per client (any radio)
 TAG=roam-detect
 STATE=/tmp/roam-detect
 FLUSHFLAG=/jffs/scripts/roam-detect.flush    # exists => auto-flush on (roamctl flush on|off)
+CONF=/jffs/scripts/roam-detect.conf
+[ -f "$CONF" ] && . "$CONF"
 
 mkdir -p "$STATE"
 echo $$ > /tmp/roam-detect.pid
@@ -29,7 +34,6 @@ port_of() { printf '%d' "$(cat /sys/class/net/br0/brif/$1/port_no 2>/dev/null)" 
 # bypasses the cooldown (the settle-roam after a storm must always heal),
 # while repeat flushes on the same radio are rate-limited. MIN_GAP is a hard
 # floor so rapid back-and-forth flapping can't turn the bypass into a storm.
-MIN_GAP=8
 heal() { # $1 = mac, $2 = reason, $3 = current bss
   now=$(date +%s)
   key=$(echo "$1" | tr -d :)

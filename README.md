@@ -239,22 +239,56 @@ If your SSIDs don't live on `wl0.1`/`wl1.1`/`wl2.1` (varies by model and
 config — list bridge members with `ls /sys/class/net/br0/brif/`), edit
 `BSSLIST` at the top of `/jffs/scripts/roam-detect.sh` after installing.
 
-<details>
-<summary>Manual install (no curl-pipe-sh)</summary>
+### Manual install (for the tech-savvy — no scripts, full control)
+
+Everything the installer does, by hand, so you know exactly what lands on
+your router:
 
 ```sh
-scp scripts/roam-detect.sh scripts/roamctl router:/jffs/scripts/
-ssh router
-  chmod a+rx /jffs/scripts/roam-detect.sh /jffs/scripts/roamctl
-  cat >> /jffs/scripts/services-start <<'EOF'
+# 1. Copy the two scripts (from a clone of this repo)
+scp scripts/roam-detect.sh scripts/roamctl <user>@<router>:/jffs/scripts/
+
+ssh <user>@<router>
+
+# 2. Permissions (they run as root via cron/boot — keep them non-world-writable)
+chmod 755 /jffs/scripts/roam-detect.sh /jffs/scripts/roamctl
+
+# 3. Adapt to your radios if needed: BSSLIST at the top of roam-detect.sh
+#    must name the bridge-member BSS interfaces your SSIDs use.
+ls /sys/class/net/br0/brif/    # candidates
+vi /jffs/scripts/roam-detect.sh
+
+# 4. Boot persistence: Merlin runs /jffs/scripts/services-start at every boot.
+#    Two lines: start the daemon (honoring the on/off policy), and register
+#    the once-a-minute crash watchdog with Merlin's cron helper (cru).
+cat >> /jffs/scripts/services-start <<'EOF'
 /jffs/scripts/roamctl boot
 cru a roam-detect-wd "* * * * * /jffs/scripts/roamctl watchdog"
 EOF
-  chmod a+rx /jffs/scripts/services-start
-  /jffs/scripts/roamctl start
-  cru a roam-detect-wd "* * * * * /jffs/scripts/roamctl watchdog"
+chmod 755 /jffs/scripts/services-start
+
+# 5. Arm it now (same two things, without waiting for a reboot)
+cru a roam-detect-wd "* * * * * /jffs/scripts/roamctl watchdog"
+/jffs/scripts/roamctl start
+
+# 6. Verify
+/jffs/scripts/roamctl status     # daemon pid + policy
+cru l | grep roam-detect         # watchdog registered
+/jffs/scripts/roamctl log        # "starting (pid ...)" line
 ```
-</details>
+
+Complete inventory of what exists after install — and all of it is removed
+by any of the uninstall paths:
+
+| Path | What it is |
+|---|---|
+| `/jffs/scripts/roam-detect.sh` | the detection daemon (one busybox `sh` loop) |
+| `/jffs/scripts/roamctl` | lifecycle wrapper (start/stop/status/log/policy/uninstall) |
+| `/jffs/scripts/roam-detect.policy` | persistent on/off switch (only if you used `policy`) |
+| two lines in `/jffs/scripts/services-start` | boot start + watchdog registration |
+| cron entry `roam-detect-wd` | watchdog, every 60 s (RAM, re-added at boot) |
+| `/tmp/roam-detect/` | per-client state (RAM) |
+| syslog tag `roam-detect` | all output (RAM-backed log) |
 
 ## Usage
 

@@ -227,6 +227,39 @@ the top first. Then consider posting your capture in the
 - **Disable Roaming Assistant** — reduces router-forced roams; does nothing
   about client-initiated ones. Partial at best.
 
+## Similar reports in the wild
+
+The roam→blackhole family shows up across Asus Broadcom models and firmware
+generations — usually without the flow-cache connection being made:
+
+- [SNB: RT-BE92U New Merlin Firmware (p.3)](https://www.snbforums.com/threads/rt-be92u-new-merlin-firmware.94409/page-3)
+  — relay that ASUS is aware of "the bug in the Broadcom chip in these
+  routers," reported to them by the Merlin team; interim advice was disabling
+  Roaming Assistant.
+- [SNB: BE92U roaming issues between 5/6 GHz bands](https://www.snbforums.com/threads/be92u-roaming-issues-between-5-6ghz-bands.96990/)
+  — same trigger (5↔6 GHz roam), client-level blackhole.
+- [SNB: Host wired to node temporarily inaccessible when roaming (AiMesh, RT-AX92U)](https://www.snbforums.com/threads/host-wired-to-node-temporarily-inaccessible-when-roaming-on-aimesh.85967/)
+  — the AX-era ancestor: roam → *one specific wired host* unreachable for
+  minutes, everything else fine.
+- [ZenTalk: BQ16 Pro — same Broadcom Wi-Fi driver bugs, `dhd_pktfwd_lut_lkup` pool/unit mismatch](https://zentalk.asus.com/t5/networking/bq16-pro-same-broadcom-wifi-driver-bugs-dhd-pktfwd-lut-lkup-get/td-p/508436)
+  — kernel-level evidence of the stale station-table race on the same SoC
+  family (stock firmware).
+- [ZenTalk: BE92U Smart Connect combined 5/6 GHz — multiple issues](https://zentalk.asus.com/t5/networking/be92u-smart-connect-with-combined-5-6ghz-network-multiple-issues/td-p/506213)
+  — stock-firmware users hitting instability with the same band-steering
+  setup.
+- [SNB: RMerlin on the Wi-Fi stack ("Wifi comes from Broadcom's SDK")](https://www.snbforums.com/threads/big-wifi-issue-with-latest-firmware.95749/)
+  — why no firmware fork can fix this directly.
+- [SNB: Disable flow cache](https://www.snbforums.com/threads/disable-flow-cache.73330/)
+  — background on the `fc`/`fcctl` acceleration layer and disabling it.
+- [SNB: Asuswrt-Merlin 3006.102.8 release thread (p.4)](https://www.snbforums.com/threads/asuswrt-merlin-3006-102-8-is-now-available.97535/page-4)
+  — the *adjacent* Guest-Network-Pro/AP-Isolation LAN-blackhole bug, easily
+  confused with this one (we ruled it out by experiment: disabling AP
+  isolation did not stop the roam blackhole).
+
+If your case matches, consider posting your `probe-pack` capture in the
+[RMerlin RT-BE92U feedback thread](https://www.snbforums.com/threads/looking-for-feedback-rt-be92u-stability-issues.96798/)
+— that's the channel that reaches ASUS.
+
 ## Credits & sources
 
 - Mechanism analysis draws on the Broadcom driver sources visible in the

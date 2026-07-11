@@ -61,6 +61,33 @@ Connect), typically **20 seconds to 3 minutes later**:
   rebooting the router. Nothing on the affected client or LAN host helps —
   the corruption lives entirely in the router.
 
+## Quick self-test — confirm you have this bug in one command
+
+While the problem is happening (the host is unreachable *right now*), SSH to
+your router (see *Setup* below) and run:
+
+```sh
+fcctl flush
+```
+
+or from your workstation in one line:
+
+```sh
+ssh <router-username>@<router-ip> 'fcctl flush'
+```
+
+This flushes the router's flow cache — the "temporary fix." It's harmless:
+no reboot, no dropped Wi-Fi, connections just re-learn their path through the
+router's normal slow path within a second or two.
+
+**If the dead host becomes instantly reachable again, you have this bug** —
+nothing else produces that signature (a reboot also "fixes" it, but a reboot
+fixes everything and proves nothing; the flush is surgical evidence). Repeat
+offenders should then install the doctor so this happens automatically.
+
+On older firmware the binary may be exposed as `fc` (`fc flush`) — same
+tool; `fc` is a symlink to `fcctl`.
+
 ## What's actually broken
 
 On Broadcom SoCs, forwarding is accelerated by a flow cache (fcache →

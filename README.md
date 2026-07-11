@@ -1,22 +1,37 @@
 # asuswrt-merlin-flowcache-doctor
 
-**Detects (and will soon auto-heal) the Broadcom flow-cache roam blackhole on
-Broadcom-based Asus routers: a Wi-Fi client roams between bands, and traffic
-between that client and *specific* LAN hosts silently dies until the router's
-flow cache is flushed.**
+Broadcom-based Asus routers accelerate LAN traffic through a per-flow cache
+instead of running every packet through the kernel. When a Wi-Fi client roams
+between bands (5 GHz ↔ 6 GHz under Smart Connect), a race in Broadcom's
+closed-source driver can leave that client's cached forwarding entries pinned
+to the radio it just left — and an inverted aging check keeps the stale
+entries alive indefinitely. The result: traffic between that client and
+*specific* LAN hosts silently blackholes — brand-new connections included —
+until the router's flow cache is flushed. The bug lives in Broadcom's driver
+blobs, so **stock AsusWRT and [Asuswrt-Merlin](https://www.asuswrt-merlin.net/)
+are equally affected**, and no firmware fix exists as of Merlin 3006.102.8.
 
-The bug is in Broadcom's driver, not in any firmware's own code — **stock
-AsusWRT and [Asuswrt-Merlin](https://www.asuswrt-merlin.net/) are equally
-affected** (Merlin ships the Wi-Fi stack unmodified from Asus's GPL drops).
-Merlin is simply where the *fix* can live, since only Merlin lets you run
-user scripts on the router — see *Requirements*.
+**This repo is the doctor.** A tiny supervised daemon for Asuswrt-Merlin
+(Merlin is required — only it can run user scripts; see *Requirements*) that
+watches every Wi-Fi client for roams and the resulting stale forwarding
+state, logs the evidence, and — phase 2, coming — flushes the affected
+client's flow entries the moment it happens: the exact invalidation the
+driver misses. Plus the diagnostics to confirm you're hitting this bug at
+all. Developed and validated live on an **RT-BE92U** (BCM6765, Merlin
+3006.102.8); the Wi-Fi 7 BE-series shares the same SDK and AX-era ancestors
+of the bug are on record, so if you match the symptoms on another model,
+please open an issue with your model + firmware.
 
-Developed and validated live on an **RT-BE92U** (BCM6765, Merlin 3006.102.8).
-The underlying bug lives in Broadcom's closed-source driver blobs, so it very
-likely affects **other Broadcom-based Asus routers** too — the Wi-Fi 7 BE-series
-(RT-BE96U, RT-BE88U, GT-BE98…) shares the same SDK, and ancestor reports of the
-same failure shape exist for AX-era models. If you see the symptoms below on
-another model, please open an issue with your model + firmware version.
+## Start here
+
+| If you want… | Go to |
+|---|---|
+| *"Is this my problem?"* — how the bug feels in daily life | [In plain words](#in-plain-words--what-this-bug-feels-like) |
+| The technical symptom fingerprint | [Symptoms](#symptoms--how-to-recognize-this-bug-technical) |
+| Proof in one command (doubles as the temporary fix) | [Quick self-test](#quick-self-test--confirm-you-have-this-bug-in-one-command) |
+| The root-cause deep dive | [What's actually broken](#whats-actually-broken) |
+| The permanent fix: install the doctor | [Setup](#setup-ssh-access-to-your-router) → [Install](#install) |
+| Similar cases across models | [Similar reports](#similar-reports-in-the-wild) |
 
 ## In plain words — what this bug feels like
 

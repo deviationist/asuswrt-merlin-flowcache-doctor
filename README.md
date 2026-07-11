@@ -199,12 +199,15 @@ roam-detect: RECOVERED aa:bb:cc:dd:ee:ff fdb now matches wl1.1
 **Auto-heal (opt-in):** enable with `roamctl flush on`. On every detected
 roam — and on any stale binding that persists across two passes — the daemon
 runs `fcctl flush --mac <that client>`: strictly per-client (never a global
-flush), rate-limited to one flush per client per 60 s, harmless by
-construction (that client's flows re-learn through the correct slow path
-within a second). Until you opt in, it only logs `WOULD FLUSH` lines so you
-can audit what it *would* have done. Clients transiently listed on two
-radios at once (a driver artifact during steering churn) are parked in a
-`DUAL` state and left alone until they settle.
+flush) and harmless by construction (that client's flows re-learn through
+the correct slow path within a second). Flushes are rate-limited with a
+**band-aware cooldown**: one flush per client per 60 s on the same radio,
+but a roam onto a *different* radio bypasses the cooldown (the settle-roam
+after a steering storm must always heal), with a hard 8 s floor so rapid
+flapping can't turn the bypass into a flush storm. Until you opt in, it only
+logs `WOULD FLUSH` lines so you can audit what it *would* have done. Clients
+transiently listed on two radios at once (a driver artifact during steering
+churn) are parked in a `DUAL` state and left alone until they settle.
 
 Planned next: event-driven detection via `wlceventd` to close the polling
 detector's known blind spots (see *Limitations*) — initial attempts to

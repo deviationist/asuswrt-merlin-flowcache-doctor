@@ -478,6 +478,13 @@ the top first. Then consider posting your capture in the
 - **Disable Roaming Assistant** — reduces router-forced roams; does nothing
   about client-initiated ones. Partial at best.
 
+## Discussion
+
+The canonical discussion thread for this bug and tool lives on SNB Forums:
+[RT-BE92U: Wi-Fi client can't reach specific LAN hosts after 5/6 GHz roam — cause found + open-source fix](https://www.snbforums.com/threads/rt-be92u-wi-fi-client-cant-reach-specific-lan-hosts-after-5-6-ghz-roam-cause-found-open-source-fix.97555/)
+— model/firmware reports from other routers are especially welcome there (or
+as GitHub issues here).
+
 ## Similar reports in the wild
 
 The roam→blackhole family shows up across ASUS Broadcom models and firmware

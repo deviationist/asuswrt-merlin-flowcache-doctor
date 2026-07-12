@@ -207,7 +207,11 @@ after a steering storm must always heal), with a hard 8 s floor so rapid
 flapping can't turn the bypass into a flush storm. Until you opt in, it only
 logs `WOULD FLUSH` lines so you can audit what it *would* have done. Clients
 transiently listed on two radios at once (a driver artifact during steering
-churn) are parked in a `DUAL` state and left alone until they settle.
+churn) are parked in a `DUAL` state and left alone until they settle — and
+**healed on settle even when the churn nets out to the same radio** (a
+there-and-back bounce is invisible to net-roam detection and leaves no FDB
+symptom, but the eviction race runs during it all the same; observed in the
+wild 2026-07-12).
 
 Planned next: event-driven detection via `wlceventd` to close the polling
 detector's known blind spots (see *Limitations*) — initial attempts to

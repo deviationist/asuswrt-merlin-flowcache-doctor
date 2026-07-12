@@ -34,14 +34,14 @@ port_of() { printf '%d' "$(cat /sys/class/net/br0/brif/$1/port_no 2>/dev/null)" 
 # bypasses the cooldown (the settle-roam after a storm must always heal),
 # while repeat flushes on the same radio are rate-limited. MIN_GAP is a hard
 # floor so rapid back-and-forth flapping can't turn the bypass into a storm.
-heal() { # $1 = mac, $2 = reason, $3 = current bss
+heal() { # $1 = mac, $2 = reason, $3 = current bss, $4 = "force" bypasses same-radio cooldown
   now=$(date +%s)
   key=$(echo "$1" | tr -d :)
   lf="$STATE/$key.lastflush"; lb="$STATE/$key.lastflushbss"
   last=0; [ -f "$lf" ] && last=$(cat "$lf")
   lastbss=""; [ -f "$lb" ] && lastbss=$(cat "$lb")
   [ $((now - last)) -lt "$MIN_GAP" ] && return 0
-  [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ] && return 0
+  [ "$4" != "force" ] && [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ] && return 0
   echo "$now" > "$lf"; echo "$3" > "$lb"
   if [ -f "$FLUSHFLAG" ]; then
     fcctl flush --mac "$1" >/dev/null 2>&1
@@ -72,16 +72,23 @@ while true; do
     # steering churn): note it once, act only when it settles.
     if [ "$(grep -c "^$mac " "$MAP")" -gt 1 ]; then
       [ "$prev_status" != "DUAL" ] && logger -t "$TAG" "DUAL $mac on multiple radios ($(grep "^$mac " "$MAP" | awk '{print $2}' | tr '\n' ' ')) — waiting for it to settle"
-      echo "$prev_bss DUAL" > "$f"
+      echo "${prev_bss:--} DUAL" > "$f"
       continue
     fi
 
     bss=$(grep "^$mac " "$MAP" | awk '{print $2}')
     bport=$(port_of "$bss")
 
-    if [ -n "$prev_bss" ] && [ "$prev_bss" != "$bss" ]; then
+    if [ -n "$prev_bss" ] && [ "$prev_bss" != "-" ] && [ "$prev_bss" != "$bss" ]; then
       logger -t "$TAG" "ROAM $mac $prev_bss -> $bss"
       heal "$mac" "roam $prev_bss->$bss" "$bss"
+    elif [ "$prev_status" = "DUAL" ]; then
+      # Left the DUAL state without a net radio change: a there-and-back
+      # bounce happened inside the churn window (invisible to net-roam
+      # detection, no FDB symptom) — exactly when the eviction race runs.
+      # Heal unconditionally (cooldown bypassed; MIN_GAP still applies).
+      logger -t "$TAG" "SETTLED $mac on $bss after multi-radio churn"
+      heal "$mac" "dual-settle on $bss" "$bss" force
     fi
 
     fport=$(echo "$FDB" | awk -v m="$mac" 'tolower($2)==m && $3=="no" {print $1; exit}')

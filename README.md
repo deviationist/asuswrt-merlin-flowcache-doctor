@@ -156,7 +156,11 @@ packets keeps re-validating itself. The kernel's own bridge/ARP tables stay
 correct the whole time; they're simply not consulted anymore.
 
 No fix exists as of Merlin **3006.102.8** / stock GPL `102_39063`. ASUS is
-reportedly aware (relayed via the Merlin team on SNB Forums). The Wi-Fi stack
+reportedly aware — per a
+[community relay on SNB Forums (July 2025)](https://www.snbforums.com/threads/rt-be92u-new-merlin-firmware.94409/page-3):
+*"Asus is aware of the bug in the Broadcom chip in these routers, and the
+Merlin team has reported it directly to Asus"* (a member's account, not an
+official ASUS or RMerlin statement — hence "reportedly"). The Wi-Fi stack
 is closed Broadcom SDK code, so a real fix can only arrive inside a future
 GPL blob merge. Until then: this project.
 
@@ -299,9 +303,9 @@ else.
 ## Will this become unnecessary? Hopefully!
 
 Yes, ideally. The real fix has to come from Broadcom, shipped inside an ASUS
-GPL update, merged into a firmware release. ASUS is reportedly aware. When
-that happens, this tool becomes redundant — by design, it's a stopgap, not a
-permanent fixture.
+GPL update, merged into a firmware release. ASUS is reportedly aware (see the
+sourced quote in *What's actually broken*). When that happens, this tool
+becomes redundant — by design, it's a stopgap, not a permanent fixture.
 
 How you'll know: after a firmware upgrade, watch `roamctl log` — if weeks of
 roaming produce no `STALE-FDB` lines (where they used to appear), the driver

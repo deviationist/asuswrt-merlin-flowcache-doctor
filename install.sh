@@ -26,7 +26,7 @@ if [ "$1" = "uninstall" ]; then
   [ -x "$DEST/roamctl" ] && "$DEST/roamctl" stop 2>/dev/null
   cru d "$CRU_ID" 2>/dev/null
   [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"
-  rm -f "$DEST/roam-detect.sh" "$DEST/roamctl" "$DEST/roam-detect.policy" "$DEST/roam-detect.flush" "$DEST/roam-detect.conf" /tmp/roam-detect.disabled
+  rm -f "$DEST/roam-detect.sh" "$DEST/roam-events.sh" "$DEST/roamctl" "$DEST/roam-detect.policy" "$DEST/roam-detect.flush" "$DEST/roam-detect.conf" /tmp/roam-detect.disabled
   rm -rf /tmp/roam-detect
   echo "flowcache-doctor uninstalled."
   exit 0
@@ -34,7 +34,7 @@ fi
 
 # Fetch scripts (prefer local copies when run from a checkout)
 mkdir -p "$DEST"
-for f in roam-detect.sh roamctl; do
+for f in roam-detect.sh roam-events.sh roamctl; do
   if [ -f "./scripts/$f" ]; then
     cp "./scripts/$f" "$DEST/$f"
   else

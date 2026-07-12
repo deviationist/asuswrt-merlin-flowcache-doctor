@@ -12,8 +12,14 @@ DEST=/jffs/scripts
 SS=$DEST/services-start
 CRU_ID=roam-detect-wd
 
-# stop daemon (busybox: no pkill)
-for p in $(ps w | grep "[r]oam-detect.sh" | awk '{print $1}'); do kill "$p"; done
+# stop daemon (busybox: no pkill; pidfile first, then the daemon's distinctive
+# "{roam-detect.sh}" ps form — never a broad grep, which could match and kill
+# the calling SSH session, see AGENTS.md)
+if [ -f /tmp/roam-detect.pid ]; then
+  p=$(cat /tmp/roam-detect.pid)
+  grep -q "roam-detect.sh" "/proc/$p/cmdline" 2>/dev/null && kill "$p"
+fi
+for p in $(ps w | grep "{[r]oam-detect.sh}" | awk '{print $1}'); do kill "$p"; done
 
 cru d "$CRU_ID" 2>/dev/null
 [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"

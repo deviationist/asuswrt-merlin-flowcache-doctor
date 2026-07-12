@@ -75,12 +75,12 @@ is a user-facing diagnosis skill, not contributor docs.
 
 ## Known open problems (good first issues for agents)
 
-- FIXED 2026-07-12: there-and-back bounces inside a DUAL window (no net radio
-  change, no FDB symptom) now heal via the dual-settle trigger. Remaining
-  variant: churn the assoclist never surfaces at all.
-
 - `wlceventd` event-driven detection: `wlceventd_msglevel=1` + syslogd `-l 7`
   produced no events on 3006.102.8 despite the binary containing Assoc/Deauth
   format strings. Cracking this closes the polling detector's storm blind spot.
 - `wl assoclist` goes blind during rapid roam storms — missed roams get no
   proactive flush (the stale-FDB backstop catches the FDB-visible subset).
+- Churn that never surfaces in the assoclist at all (no DUAL, no roam, no FDB
+  symptom) has no trigger — theorized, never observed. The dual-settle trigger
+  (added 2026-07-12 after a live miss) already closed the observable variant:
+  there-and-back bounces inside a DUAL window.

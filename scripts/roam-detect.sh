@@ -1,5 +1,5 @@
 #!/bin/sh
-# roam-detect.sh — flowcache-doctor daemon (phase 2: detect + optional auto-heal)
+# roam-detect.sh — flowcache-doctor daemon (detect + optional auto-heal)
 #
 # Detects the Broadcom flow-cache roam blackhole on Asuswrt-Merlin routers and,
 # when auto-flush is enabled (roamctl flush on), surgically flushes ONLY the

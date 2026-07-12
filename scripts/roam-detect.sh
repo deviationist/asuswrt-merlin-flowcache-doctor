@@ -45,9 +45,10 @@ heal() { # $1 = mac, $2 = reason, $3 = current bss, $4 = "force" bypasses same-r
   lf="$STATE/$key.lastflush"; lb="$STATE/$key.lastflushbss"
   last=0; [ -f "$lf" ] && last=$(cat "$lf")
   lastbss=""; [ -f "$lb" ] && lastbss=$(cat "$lb")
-  [ $((now - last)) -lt "$MIN_GAP" ] && return 0
+  [ $((now - last)) -lt "$MIN_GAP" ] && { [ "$3" != "$lastbss" ] && [ ! -f "$STATE/$key.pending" ] && echo "$2|$3" > "$STATE/$key.pending"; return 0; }
   [ "$4" != "force" ] && [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ] && return 0
   echo "$now" > "$lf"; echo "$3" > "$lb"
+  rm -f "$STATE/$key.pending"
   if [ -f "$FLUSHFLAG" ]; then
     fcctl flush --mac "$1" >/dev/null 2>&1
     logger -t "$TAG" "FLUSHED $1 ($2)"
@@ -109,6 +110,11 @@ while true; do
     else
       status="OK"
       case "$prev_status" in STALE*) [ "$LOG_EVENTS" = "1" ] && logger -t "$TAG" "RECOVERED $mac fdb now matches $bss" ;; esac
+    fi
+    pf="$STATE/$(echo "$mac" | tr -d :).pending"
+    if [ -f "$pf" ]; then
+      IFS='|' read preason pbss < "$pf"
+      heal "$mac" "deferred: $preason" "${pbss:-$bss}" force
     fi
     echo "$bss $status" > "$f"
   done

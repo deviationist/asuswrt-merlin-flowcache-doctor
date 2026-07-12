@@ -498,6 +498,13 @@ generations — usually without the flow-cache connection being made:
 - [ZenTalk: BE92U Smart Connect combined 5/6 GHz — multiple issues](https://zentalk.asus.com/t5/networking/be92u-smart-connect-with-combined-5-6ghz-network-multiple-issues/td-p/506213)
   — stock-firmware users hitting instability with the same band-steering
   setup.
+- [SNB: Persistent Broadcom kernel instability on RT-BE92U (AiMesh)](https://www.snbforums.com/threads/attempting-to-track-down-a-persistent-broadcom-kernel-instability-on-asus-rt-be92u-in-an-aimesh-setup.96138/)
+  — a *different* member of the same family: station-**departure** events leak
+  the driver's per-station control block (`WLC_SCB_DEAUTHORIZE error (-30)`),
+  degrading the whole router until reboot. Not the flow-cache blackhole (their
+  symptom is global and loud; ours is per-host and silent) — but further
+  evidence that per-station state lifecycle handling in this Broadcom stack is
+  broken in more than one way.
 - [SNB: RMerlin on the Wi-Fi stack ("Wifi comes from Broadcom's SDK")](https://www.snbforums.com/threads/big-wifi-issue-with-latest-firmware.95749/)
   — why no firmware fork can fix this directly.
 - [SNB: Disable flow cache](https://www.snbforums.com/threads/disable-flow-cache.73330/)

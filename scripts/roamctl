@@ -4,6 +4,8 @@
 # watchdog (via cru/cron), manual stop that disarms the watchdog, and a
 # persistent on/off policy.
 DAEMON=/jffs/scripts/roam-detect.sh
+EVDAEMON=/jffs/scripts/roam-events.sh    # opt-in wlceventd event listener
+CONF=/jffs/scripts/roam-detect.conf
 TAG=roam-detect
 FLAG=/tmp/roam-detect.disabled           # runtime manual-stop flag (cleared by start/reboot)
 POLICY=/jffs/scripts/roam-detect.policy  # persistent policy: "on" (default if absent) or "off"
@@ -21,16 +23,34 @@ pids() {
   fi
   ps w | grep "{[r]oam-detect.sh}" | awk '{print $1}'
 }
+epids() {
+  if [ -f /tmp/roam-events.pid ]; then
+    p=$(cat /tmp/roam-events.pid)
+    grep -q "roam-events.sh" "/proc/$p/cmdline" 2>/dev/null && { echo "$p"; return; }
+  fi
+  ps w | grep "{[r]oam-events.sh}" | awk '{print $1}'
+}
 policy() { [ -f "$POLICY" ] && cat "$POLICY" || echo on; }
+events_enabled() { EVENT_HEAL=0; [ -f "$CONF" ] && . "$CONF"; [ "$EVENT_HEAL" = "1" ] && [ -x "$EVDAEMON" ]; }
+start_ev() { events_enabled || return 0; [ -n "$(epids)" ] || "$EVDAEMON" >/dev/null 2>&1 & }
+stop_ev()  { for p in $(epids); do kill "$p"; done; }
 
 case "$1" in
-  start)    rm -f "$FLAG"; [ -n "$(pids)" ] || "$DAEMON" >/dev/null 2>&1 & ;;
-  stop)     touch "$FLAG"; for p in $(pids); do kill "$p"; done
+  start)    rm -f "$FLAG"; [ -n "$(pids)" ] || "$DAEMON" >/dev/null 2>&1 &
+            start_ev ;;
+  stop)     touch "$FLAG"; for p in $(pids); do kill "$p"; done; stop_ev
             logger -t "$TAG" "stopped manually (watchdog disarmed until 'roamctl start' or reboot)" ;;
-  restart)  for p in $(pids); do kill "$p"; done; sleep 1; rm -f "$FLAG"; "$DAEMON" >/dev/null 2>&1 & ;;
+  restart)  for p in $(pids); do kill "$p"; done; stop_ev; sleep 1; rm -f "$FLAG"; "$DAEMON" >/dev/null 2>&1 &
+            start_ev ;;
   status)   echo "policy: $(policy)"; echo "autoflush: $([ -f "$FLUSHFLAG" ] && echo on || echo off)"
             p=$(pids)
-            if [ -n "$p" ]; then echo "running (pid $p)"; else echo "not running$([ -f $FLAG ] && echo ' (manually stopped)')"; fi ;;
+            if [ -n "$p" ]; then echo "running (pid $p)"; else echo "not running$([ -f $FLAG ] && echo ' (manually stopped)')"; fi
+            if events_enabled; then
+              ep=$(epids)
+              if [ -n "$ep" ]; then echo "event listener: running (pid $ep)"; else echo "event listener: enabled but NOT running"; fi
+            else
+              echo "event listener: off (EVENT_HEAL=1 in roam-detect.conf to enable)"
+            fi ;;
   log)      grep "$TAG" /tmp/syslog.log | tail -30 ;;
   policy)   case "$2" in
               on|off) echo "$2" > "$POLICY"; logger -t "$TAG" "restart policy set to $2"; echo "policy: $2" ;;
@@ -42,15 +62,19 @@ case "$1" in
               *)   echo "autoflush: $([ -f "$FLUSHFLAG" ] && echo on || echo off)" ;;
             esac ;;
   boot)     [ "$(policy)" = "on" ] || exit 0
-            [ -n "$(pids)" ] || "$DAEMON" >/dev/null 2>&1 & ;;
+            [ -n "$(pids)" ] || "$DAEMON" >/dev/null 2>&1 &
+            start_ev ;;
   watchdog) [ "$(policy)" = "on" ] || exit 0
             [ -f "$FLAG" ] && exit 0
-            [ -n "$(pids)" ] || { logger -t "$TAG" "watchdog: daemon not running, restarting"; "$DAEMON" >/dev/null 2>&1 & } ;;
-  uninstall) for p in $(pids); do kill "$p"; done
+            [ -n "$(pids)" ] || { logger -t "$TAG" "watchdog: daemon not running, restarting"; "$DAEMON" >/dev/null 2>&1 & }
+            if events_enabled && [ -z "$(epids)" ]; then
+              logger -t "$TAG" "watchdog: event listener not running, restarting"; "$EVDAEMON" >/dev/null 2>&1 &
+            fi ;;
+  uninstall) for p in $(pids); do kill "$p"; done; stop_ev
             cru d roam-detect-wd 2>/dev/null
             SS=/jffs/scripts/services-start
             [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"
-            rm -f "$DAEMON" "$POLICY" "$FLAG" "$FLUSHFLAG" /jffs/scripts/roam-detect.conf
+            rm -f "$DAEMON" "$EVDAEMON" "$POLICY" "$FLAG" "$FLUSHFLAG" "$CONF" /tmp/roam-events.pid
             rm -rf /tmp/roam-detect
             logger -t "$TAG" "uninstalled"
             echo "flowcache-doctor uninstalled."

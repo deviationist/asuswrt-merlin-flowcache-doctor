@@ -32,6 +32,11 @@ if [ "$1" = "uninstall" ]; then
   exit 0
 fi
 
+# Fresh install (no prior roamctl) => healing on out of the box. On
+# reinstall/update we respect the user's existing flush on/off choice.
+FRESH=0
+[ -f "$DEST/roamctl" ] || FRESH=1
+
 # Fetch scripts (prefer local copies when run from a checkout)
 mkdir -p "$DEST"
 for f in roam-detect.sh roam-events.sh roamctl; do
@@ -48,6 +53,9 @@ if [ ! -f "$SS" ]; then printf '#!/bin/sh\n' > "$SS"; chmod 755 "$SS"; fi
 grep -q "roamctl boot" "$SS" || echo "$DEST/roamctl boot" >> "$SS"
 grep -q "$CRU_ID" "$SS" || echo "cru a $CRU_ID \"* * * * * $DEST/roamctl watchdog\"" >> "$SS"
 
+# Fresh installs heal out of the box (audit-only available: roamctl flush off)
+[ "$FRESH" = "1" ] && touch "$DEST/roam-detect.flush"
+
 # Arm now
 cru a "$CRU_ID" "* * * * * $DEST/roamctl watchdog"
 "$DEST/roamctl" start
@@ -56,14 +64,18 @@ sleep 2
 
 cat <<'EOF'
 
-Installed. The detector runs now, restarts on crash (60s watchdog), and
-survives reboots. If your SSIDs don't live on wl0.1/wl1.1/wl2.1, edit
-BSSLIST at the top of /jffs/scripts/roam-detect.sh (list bridge members
-with: ls /sys/class/net/br0/brif/).
+Installed and HEALING (per-client flushes on roam events, rate-limited —
+never a global flush). Restarts on crash (60s watchdog), survives reboots.
+The event listener runs automatically when your firmware provides
+/jffs/wifi_wlc.log; otherwise the 2s poller covers everything.
+If your SSIDs don't live on wl0.1/wl1.1/wl2.1, set BSSLIST in
+/jffs/scripts/roam-detect.conf (list bridge members with:
+ls /sys/class/net/br0/brif/).
 
 Useful commands:
-  /jffs/scripts/roamctl log         # what it has detected
-  /jffs/scripts/roamctl status      # running? policy?
+  /jffs/scripts/roamctl log         # what it has detected and healed
+  /jffs/scripts/roamctl status      # running? healing? listener?
+  /jffs/scripts/roamctl flush off   # audit-only mode (log, don't heal)
   /jffs/scripts/roamctl policy off  # disable persistently
   sh install.sh uninstall           # remove everything
 EOF

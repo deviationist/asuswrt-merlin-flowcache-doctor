@@ -39,8 +39,13 @@ editing anything.
 
 - **Flushes are per-client only** (`fcctl flush --mac`). The daemon must
   never run a global `fcctl flush`; that stays a human command.
-- **Auto-heal is opt-in** (`roamctl flush on` → flag file). Fresh installs
-  are log-only. Don't change the default.
+- **Auto-heal is ON for fresh installs** (installer creates the flush flag;
+  owner decision 2026-07-12: an installed doctor must create value out of
+  the box). Audit-only mode is `roamctl flush off`; **reinstalls/updates
+  must respect the user's existing on/off choice** (the installer only
+  touches the flag on FRESH installs — keep it that way). The event
+  listener is likewise default-on but must auto-stand-down when
+  `/jffs/wifi_wlc.log` doesn't exist (other firmware builds).
 - **Rate limiting**: band-aware cooldown (`COOLDOWN` same-radio, bypass on
   radio change, `MIN_GAP` hard floor). A settle-roam onto a new radio must
   always be allowed to heal; flapping must never cause a flush storm.

@@ -217,10 +217,19 @@ there-and-back bounce is invisible to net-roam detection and leaves no FDB
 symptom, but the eviction race runs during it all the same; observed in the
 wild 2026-07-12).
 
-Planned next: event-driven detection via `wlceventd` to close the polling
-detector's known blind spots (see *Limitations*) — initial attempts to
-surface its events via `wlceventd_msglevel` haven't produced output on
-3006.102.8 yet; investigation notes welcome.
+**Event listener (opt-in, `EVENT_HEAL=1` in the conf):** a second heal
+source, `roam-events.sh`, tails the driver's own association log
+(`/jffs/wifi_wlc.log`, written by `wlceventd` by default on this firmware)
+and heals a client **within ~1 second** of a successful (re)association —
+faster than the poller's 2 s floor and immune to its storm blind spots.
+Both sources share per-client cooldown state, so they cooperate rather than
+double-flush; if the event feed dies, the poller still covers everything it
+always did. One caution baked into the design: `wlceventd` only emits events
+when started by init — if it's ever killed and restarted from a shell it
+goes silent, and only `service restart_wireless` (or a reboot) restores the
+feed. Cross-radio flushes suppressed by the anti-storm floor leave a
+*pending marker* that the poller retries seconds later (covers rapid
+multi-hop reconnects like off → 2.4 GHz → 6 GHz).
 
 ## Claude Code skill
 
@@ -368,7 +377,9 @@ by any of the uninstall paths:
 | `/jffs/scripts/roam-detect.policy` | persistent on/off switch (only if you used `policy`) |
 | two lines in `/jffs/scripts/services-start` | boot start + watchdog registration |
 | cron entry `roam-detect-wd` | watchdog, every 60 s (RAM, re-added at boot) |
-| `/tmp/roam-detect/` | per-client state (RAM) |
+| `/jffs/scripts/roam-events.sh` | opt-in wlceventd event listener (`EVENT_HEAL=1`) |
+| `/tmp/roam-detect/` | per-client state (RAM), shared by both heal sources |
+| `/tmp/roam-events.pid` | event listener pidfile (RAM) |
 | syslog tag `roam-detect` | all output (RAM-backed log) |
 
 ## Usage
@@ -403,6 +414,7 @@ COOLDOWN=60                  # min seconds between flushes per client (same radi
 MIN_GAP=8                    # hard floor between flushes per client (any radio)
 HEAL_TRIGGERS="roam stale-fdb dual-settle"   # which triggers may flush
 LOG_EVENTS=1                 # 0 = quiet mode: log only actions (FLUSHED) + lifecycle
+EVENT_HEAL=0                 # 1 = also run the wlceventd event listener (sub-second heals)
 ```
 
 `LOG_EVENTS=0` silences the observation lines (`ROAM`/`DUAL`/`SETTLED`/
@@ -461,14 +473,26 @@ the top first. Then consider posting your capture in the
 ## Limitations (honest ones)
 
 - `wl assoclist` — the polling detector's truth source — can go blind during
-  rapid roam storms, missing events (observed). The planned `wlceventd`
-  event-driven trigger fixes this properly.
-- Flow-level staleness **without** an FDB-level mismatch exists (observed
-  once): the per-MAC comparison can't see it. A roam-triggered flush (phase
-  2) covers it; pure table-diffing cannot.
-- A client transiently listed on two radios at once makes v1 flap
-  ROAM/RECOVERED pairs — noisy but harmless.
+  rapid roam storms, missing events (observed). The opt-in `wlceventd` event
+  listener (`EVENT_HEAL=1`) closes this: the driver's own event log keeps
+  flowing when the query interfaces don't.
+- Flow-level staleness **without** an FDB-level mismatch exists (observed):
+  table comparison can't see it, so healing relies on roam/settle/event
+  triggers firing. Churn that produces *no* observable signal at all (no
+  assoc event, no assoclist change, no FDB symptom) remains theoretically
+  uncovered — never observed.
+- The healing residual: a roam still costs a few seconds of turbulence
+  (association handover + flow re-learn). The doctor makes the bug
+  survivable; it cannot make roaming free.
+- Active traffic to a blackholed host keeps the stale entry alive (the
+  aging inversion) — so without a heal trigger, retry loops *sustain* the
+  outage while ~2 minutes of quiet lets it starve. Monitoring pings count
+  as traffic (we proved this on ourselves — twice).
 - BSS interface names vary by model/config — set `BSSLIST` accordingly.
+- The event listener depends on ASUS's `wlceventd` logger staying healthy;
+  killed-and-shell-restarted wlceventd goes silent (see caution above). The
+  poller is deliberately kept as the always-on primary for exactly this
+  reason.
 
 ## Alternative workarounds
 

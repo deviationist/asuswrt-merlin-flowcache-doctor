@@ -384,7 +384,7 @@ by any of the uninstall paths:
 | `/jffs/scripts/roam-detect.policy` | persistent on/off switch (only if you used `policy`) |
 | two lines in `/jffs/scripts/services-start` | boot start + watchdog registration |
 | cron entry `roam-detect-wd` | watchdog, every 60 s (RAM, re-added at boot) |
-| `/jffs/scripts/roam-events.sh` | opt-in wlceventd event listener (`EVENT_HEAL=1`) |
+| `/jffs/scripts/roam-events.sh` | wlceventd event listener (default-on when available; `EVENT_HEAL=0` disables) |
 | `/tmp/roam-detect/` | per-client state (RAM), shared by both heal sources |
 | `/tmp/roam-events.pid` | event listener pidfile (RAM) |
 | syslog tag `roam-detect` | all output (RAM-backed log) |
@@ -480,8 +480,7 @@ the top first. Then consider posting your capture in the
 ## Limitations (honest ones)
 
 - `wl assoclist` — the polling detector's truth source — can go blind during
-  rapid roam storms, missing events (observed). The opt-in `wlceventd` event
-  listener (`EVENT_HEAL=1`) closes this: the driver's own event log keeps
+  rapid roam storms, missing events (observed).   listener (`EVENT_HEAL=1`) closes this: the driver's own event log keeps
   flowing when the query interfaces don't.
 - Flow-level staleness **without** an FDB-level mismatch exists (observed):
   table comparison can't see it, so healing relies on roam/settle/event

@@ -17,6 +17,7 @@ BSSLIST="wl0.1 wl1.1 wl2.1"
 INTERVAL=2      # seconds between detection passes
 COOLDOWN=60     # min seconds between flushes per client (same radio)
 MIN_GAP=8       # hard floor between flushes per client (any radio)
+HEAL_TRIGGERS="roam stale-fdb dual-settle"   # which triggers may flush (detection always logs all)
 TAG=roam-detect
 STATE=/tmp/roam-detect
 FLUSHFLAG=/jffs/scripts/roam-detect.flush    # exists => auto-flush on (roamctl flush on|off)
@@ -28,6 +29,9 @@ echo $$ > /tmp/roam-detect.pid
 logger -t "$TAG" "starting (pid $$, interval ${INTERVAL}s, bss: $BSSLIST, autoflush: $([ -f "$FLUSHFLAG" ] && echo on || echo off))"
 
 port_of() { printf '%d' "$(cat /sys/class/net/br0/brif/$1/port_no 2>/dev/null)" 2>/dev/null; }
+
+# Is a heal trigger class enabled? (HEAL_TRIGGERS is a space-separated list)
+want() { case " $HEAL_TRIGGERS " in *" $1 "*) return 0;; *) return 1;; esac; }
 
 # Rate-limited per-MAC flush (or announcement, when auto-flush is off).
 # Band-aware cooldown: a roam onto a DIFFERENT radio than the last flush
@@ -81,14 +85,14 @@ while true; do
 
     if [ -n "$prev_bss" ] && [ "$prev_bss" != "-" ] && [ "$prev_bss" != "$bss" ]; then
       logger -t "$TAG" "ROAM $mac $prev_bss -> $bss"
-      heal "$mac" "roam $prev_bss->$bss" "$bss"
+      want roam && heal "$mac" "roam $prev_bss->$bss" "$bss"
     elif [ "$prev_status" = "DUAL" ]; then
       # Left the DUAL state without a net radio change: a there-and-back
       # bounce happened inside the churn window (invisible to net-roam
       # detection, no FDB symptom) — exactly when the eviction race runs.
       # Heal unconditionally (cooldown bypassed; MIN_GAP still applies).
       logger -t "$TAG" "SETTLED $mac on $bss after multi-radio churn"
-      heal "$mac" "dual-settle on $bss" "$bss" force
+      want dual-settle && heal "$mac" "dual-settle on $bss" "$bss" force
     fi
 
     fport=$(echo "$FDB" | awk -v m="$mac" 'tolower($2)==m && $3=="no" {print $1; exit}')
@@ -98,7 +102,7 @@ while true; do
           # persisted for 2+ passes -> real stale binding, not a transient
           [ "$prev_status" = "STALE1:$fport" ] && logger -t "$TAG" "STALE-FDB $mac assoc=$bss(port $bport) fdb=port $fport (persistent)"
           status="STALE2:$fport"
-          heal "$mac" "stale-fdb port $fport" "$bss" ;;   # cooldown gates retries
+          want stale-fdb && heal "$mac" "stale-fdb port $fport" "$bss" ;;   # cooldown gates retries
         *) status="STALE1:$fport" ;;               # first sighting: wait one pass
       esac
     else

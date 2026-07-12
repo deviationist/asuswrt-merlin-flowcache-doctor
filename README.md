@@ -397,7 +397,17 @@ BSSLIST="wl0.1 wl1.1 wl2.1"  # your SSID-carrying BSS interfaces (varies by mode
 INTERVAL=2                   # seconds between detection passes
 COOLDOWN=60                  # min seconds between flushes per client (same radio)
 MIN_GAP=8                    # hard floor between flushes per client (any radio)
+HEAL_TRIGGERS="roam stale-fdb dual-settle"   # which triggers may flush
 ```
+
+`HEAL_TRIGGERS` selects which detections are allowed to heal (detection
+itself always runs and logs everything): `roam` = preventive flush on every
+net radio change; `stale-fdb` = corrective flush when the forwarding table
+provably contradicts the association (retried until recovered);
+`dual-settle` = flush when a client exits multi-radio churn even without a
+net radio change. Default: all three. A conservative setup that only ever
+flushes on *proven* corruption would be `HEAL_TRIGGERS="stale-fdb"` — at the
+cost of eating the blackhole classes the preventive triggers exist for.
 
 Restart after editing: `/jffs/scripts/roamctl restart`. `BSSLIST` is the one
 most people need (per-model interface names); the timing knobs are for the

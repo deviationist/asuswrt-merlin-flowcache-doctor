@@ -22,6 +22,11 @@ FLUSHFLAG=/jffs/scripts/roam-detect.flush
 CONF=/jffs/scripts/roam-detect.conf
 [ -f "$CONF" ] && . "$CONF"
 
+if [ ! -f "$EVLOG" ]; then
+  logger -t "$TAG" "event source $EVLOG not present on this firmware — standing down (the polling daemon covers healing)"
+  exit 0
+fi
+
 mkdir -p "$STATE"
 echo $$ > /tmp/roam-events.pid
 logger -t "$TAG" "starting (pid $$, source: $EVLOG)"

@@ -18,9 +18,11 @@ are equally affected**, and no firmware fix exists as of Merlin 3006.102.8.
 **This repo is the doctor.** A tiny supervised daemon for Asuswrt-Merlin
 (Merlin is required — only it can run user scripts; see *Requirements*) that
 watches every Wi-Fi client for roams and the resulting stale forwarding
-state, logs the evidence, and — opt-in — heals it automatically: a surgical
+state and heals automatically, out of the box: a surgical
 `fcctl flush --mac` of just the affected client, the exact invalidation the
-driver misses. Never a global flush, rate-limited per client. Plus the
+driver misses. Never a global flush, rate-limited per client, and an
+audit-only mode (`roamctl flush off`) for those who want to watch before
+trusting. Plus the
 diagnostics to confirm you're hitting this bug at all, and a bundled
 [Claude Code skill](#claude-code-skill) for AI-assisted diagnosis.
 Developed and validated live on an **RT-BE92U** (BCM6765, Merlin
@@ -200,16 +202,18 @@ roam-detect: FLUSHED aa:bb:cc:dd:ee:ff (roam wl1.1->wl2.1)
 roam-detect: RECOVERED aa:bb:cc:dd:ee:ff fdb now matches wl1.1
 ```
 
-**Auto-heal (opt-in):** enable with `roamctl flush on`. On every detected
-roam — and on any stale binding that persists across two passes — the daemon
-runs `fcctl flush --mac <that client>`: strictly per-client (never a global
+**Auto-heal (on by default for fresh installs):** on every detected roam —
+and on any stale binding that persists across two passes — the daemon runs
+`fcctl flush --mac <that client>`: strictly per-client (never a global
 flush) and harmless by construction (that client's flows re-learn through
 the correct slow path within a second). Flushes are rate-limited with a
 **band-aware cooldown**: one flush per client per 60 s on the same radio,
 but a roam onto a *different* radio bypasses the cooldown (the settle-roam
 after a steering storm must always heal), with a hard 8 s floor so rapid
-flapping can't turn the bypass into a flush storm. Until you opt in, it only
-logs `WOULD FLUSH` lines so you can audit what it *would* have done. Clients
+flapping can't turn the bypass into a flush storm. Skeptics can switch to
+audit-only mode with `roamctl flush off` — detection keeps running and logs
+`WOULD FLUSH` lines showing exactly what it *would* have done (re-arming is
+`roamctl flush on`; reinstalls and updates respect your choice). Clients
 transiently listed on two radios at once (a driver artifact during steering
 churn) are parked in a `DUAL` state and left alone until they settle — and
 **healed on settle even when the churn nets out to the same radio** (a
@@ -217,19 +221,22 @@ there-and-back bounce is invisible to net-roam detection and leaves no FDB
 symptom, but the eviction race runs during it all the same; observed in the
 wild 2026-07-12).
 
-**Event listener (opt-in, `EVENT_HEAL=1` in the conf):** a second heal
-source, `roam-events.sh`, tails the driver's own association log
+**Event listener (on by default when available):** a second heal source,
+`roam-events.sh`, tails the driver's own association log
 (`/jffs/wifi_wlc.log`, written by `wlceventd` by default on this firmware)
 and heals a client **within ~1 second** of a successful (re)association —
 faster than the poller's 2 s floor and immune to its storm blind spots.
 Both sources share per-client cooldown state, so they cooperate rather than
 double-flush; if the event feed dies, the poller still covers everything it
-always did. One caution baked into the design: `wlceventd` only emits events
-when started by init — if it's ever killed and restarted from a shell it
-goes silent, and only `service restart_wireless` (or a reboot) restores the
-feed. Cross-radio flushes suppressed by the anti-storm floor leave a
-*pending marker* that the poller retries seconds later (covers rapid
-multi-hop reconnects like off → 2.4 GHz → 6 GHz).
+always did. The listener enables itself only when the firmware actually
+provides the event log — on builds without `/jffs/wifi_wlc.log` it stands
+down with a log line and the poller carries everything (disable explicitly
+with `EVENT_HEAL=0` in the conf). One caution baked into the design:
+`wlceventd` only emits events when started by init — if it's ever killed and
+restarted from a shell it goes silent, and only `service restart_wireless`
+(or a reboot) restores the feed. Cross-radio flushes suppressed by the
+anti-storm floor leave a *pending marker* that the poller retries seconds
+later (covers rapid multi-hop reconnects like off → 2.4 GHz → 6 GHz).
 
 ## Claude Code skill
 
@@ -414,7 +421,7 @@ COOLDOWN=60                  # min seconds between flushes per client (same radi
 MIN_GAP=8                    # hard floor between flushes per client (any radio)
 HEAL_TRIGGERS="roam stale-fdb dual-settle"   # which triggers may flush
 LOG_EVENTS=1                 # 0 = quiet mode: log only actions (FLUSHED) + lifecycle
-EVENT_HEAL=0                 # 1 = also run the wlceventd event listener (sub-second heals)
+EVENT_HEAL=1                 # 0 = disable the wlceventd event listener (poller only)
 ```
 
 `LOG_EVENTS=0` silences the observation lines (`ROAM`/`DUAL`/`SETTLED`/

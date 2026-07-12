@@ -19,6 +19,7 @@ COOLDOWN=60     # min seconds between flushes per client (same radio)
 MIN_GAP=8       # hard floor between flushes per client (any radio)
 HEAL_TRIGGERS="roam stale-fdb dual-settle"   # which triggers may flush (detection always logs all)
 LOG_EVENTS=1    # 1 = log observations (ROAM/DUAL/SETTLED/STALE/RECOVERED); 0 = log only actions (FLUSHED) + lifecycle
+EVENT_HEAL=1    # 1 = run the wlceventd event listener too when the firmware provides its log; 0 = poller only
 TAG=roam-detect
 STATE=/tmp/roam-detect
 FLUSHFLAG=/jffs/scripts/roam-detect.flush    # exists => auto-flush on (roamctl flush on|off)

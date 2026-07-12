@@ -31,7 +31,9 @@ epids() {
   ps w | grep "{[r]oam-events.sh}" | awk '{print $1}'
 }
 policy() { [ -f "$POLICY" ] && cat "$POLICY" || echo on; }
-events_enabled() { EVENT_HEAL=0; [ -f "$CONF" ] && . "$CONF"; [ "$EVENT_HEAL" = "1" ] && [ -x "$EVDAEMON" ]; }
+# Event listener: ON by default; disable with EVENT_HEAL=0 in the conf.
+# Auto-stands-down when the firmware doesn't provide the wlceventd event log.
+events_enabled() { EVENT_HEAL=1; [ -f "$CONF" ] && . "$CONF"; [ "$EVENT_HEAL" != "0" ] && [ -x "$EVDAEMON" ] && [ -f /jffs/wifi_wlc.log ]; }
 start_ev() { events_enabled || return 0; [ -n "$(epids)" ] || "$EVDAEMON" >/dev/null 2>&1 & }
 stop_ev()  { for p in $(epids); do kill "$p"; done; }
 

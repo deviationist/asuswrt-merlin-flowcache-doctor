@@ -18,6 +18,7 @@ INTERVAL=2      # seconds between detection passes
 COOLDOWN=60     # min seconds between flushes per client (same radio)
 MIN_GAP=8       # hard floor between flushes per client (any radio)
 HEAL_TRIGGERS="roam stale-fdb dual-settle"   # which triggers may flush (detection always logs all)
+LOG_EVENTS=1    # 1 = log observations (ROAM/DUAL/SETTLED/STALE/RECOVERED); 0 = log only actions (FLUSHED) + lifecycle
 TAG=roam-detect
 STATE=/tmp/roam-detect
 FLUSHFLAG=/jffs/scripts/roam-detect.flush    # exists => auto-flush on (roamctl flush on|off)
@@ -75,7 +76,7 @@ while true; do
     # Client listed on multiple radios at once (driver artifact during
     # steering churn): note it once, act only when it settles.
     if [ "$(grep -c "^$mac " "$MAP")" -gt 1 ]; then
-      [ "$prev_status" != "DUAL" ] && logger -t "$TAG" "DUAL $mac on multiple radios ($(grep "^$mac " "$MAP" | awk '{print $2}' | tr '\n' ' ')) — waiting for it to settle"
+      [ "$LOG_EVENTS" = "1" ] && [ "$prev_status" != "DUAL" ] && logger -t "$TAG" "DUAL $mac on multiple radios ($(grep "^$mac " "$MAP" | awk '{print $2}' | tr '\n' ' ')) — waiting for it to settle"
       echo "${prev_bss:--} DUAL" > "$f"
       continue
     fi
@@ -84,14 +85,14 @@ while true; do
     bport=$(port_of "$bss")
 
     if [ -n "$prev_bss" ] && [ "$prev_bss" != "-" ] && [ "$prev_bss" != "$bss" ]; then
-      logger -t "$TAG" "ROAM $mac $prev_bss -> $bss"
+      [ "$LOG_EVENTS" = "1" ] && logger -t "$TAG" "ROAM $mac $prev_bss -> $bss"
       want roam && heal "$mac" "roam $prev_bss->$bss" "$bss"
     elif [ "$prev_status" = "DUAL" ]; then
       # Left the DUAL state without a net radio change: a there-and-back
       # bounce happened inside the churn window (invisible to net-roam
       # detection, no FDB symptom) — exactly when the eviction race runs.
       # Heal unconditionally (cooldown bypassed; MIN_GAP still applies).
-      logger -t "$TAG" "SETTLED $mac on $bss after multi-radio churn"
+      [ "$LOG_EVENTS" = "1" ] && logger -t "$TAG" "SETTLED $mac on $bss after multi-radio churn"
       want dual-settle && heal "$mac" "dual-settle on $bss" "$bss" force
     fi
 
@@ -100,14 +101,14 @@ while true; do
       case "$prev_status" in
         STALE1:$fport|STALE2:$fport)
           # persisted for 2+ passes -> real stale binding, not a transient
-          [ "$prev_status" = "STALE1:$fport" ] && logger -t "$TAG" "STALE-FDB $mac assoc=$bss(port $bport) fdb=port $fport (persistent)"
+          [ "$LOG_EVENTS" = "1" ] && [ "$prev_status" = "STALE1:$fport" ] && logger -t "$TAG" "STALE-FDB $mac assoc=$bss(port $bport) fdb=port $fport (persistent)"
           status="STALE2:$fport"
           want stale-fdb && heal "$mac" "stale-fdb port $fport" "$bss" ;;   # cooldown gates retries
         *) status="STALE1:$fport" ;;               # first sighting: wait one pass
       esac
     else
       status="OK"
-      case "$prev_status" in STALE*) logger -t "$TAG" "RECOVERED $mac fdb now matches $bss" ;; esac
+      case "$prev_status" in STALE*) [ "$LOG_EVENTS" = "1" ] && logger -t "$TAG" "RECOVERED $mac fdb now matches $bss" ;; esac
     fi
     echo "$bss $status" > "$f"
   done

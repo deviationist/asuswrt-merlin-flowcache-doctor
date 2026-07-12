@@ -398,7 +398,16 @@ INTERVAL=2                   # seconds between detection passes
 COOLDOWN=60                  # min seconds between flushes per client (same radio)
 MIN_GAP=8                    # hard floor between flushes per client (any radio)
 HEAL_TRIGGERS="roam stale-fdb dual-settle"   # which triggers may flush
+LOG_EVENTS=1                 # 0 = quiet mode: log only actions (FLUSHED) + lifecycle
 ```
+
+`LOG_EVENTS=0` silences the observation lines (`ROAM`/`DUAL`/`SETTLED`/
+`STALE-FDB`/`RECOVERED`) for noise-sensitive setups; actions (`FLUSHED`,
+`WOULD FLUSH`) and lifecycle messages are always logged — they're the audit
+trail that tells you the tool is working (and, after a firmware update,
+whether the bug is gone). Log growth is a non-issue either way: the router's
+syslog is size-capped and rotated by the firmware; on a stormy day the
+doctor contributes a few dozen lines (~2% of syslog in our measurements).
 
 `HEAL_TRIGGERS` selects which detections are allowed to heal (detection
 itself always runs and logs everything): `roam` = preventive flush on every

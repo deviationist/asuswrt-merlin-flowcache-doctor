@@ -86,11 +86,13 @@ Install (on the router):
 curl -fsSL https://raw.githubusercontent.com/deviationist/asuswrt-merlin-flowcache-doctor/main/install.sh | sh
 ```
 
-Then decide with the user whether to enable automatic healing (per-MAC,
-rate-limited, never global):
+Fresh installs heal automatically out of the box (per-MAC, rate-limited,
+never global). If the user prefers to observe before trusting, offer
+audit-only mode — detection keeps logging `WOULD FLUSH` lines without
+acting:
 
 ```sh
-/jffs/scripts/roamctl flush on
+/jffs/scripts/roamctl flush off   # audit-only; re-arm with: flush on
 ```
 
 Verify: `/jffs/scripts/roamctl status` (running, policy on, autoflush as

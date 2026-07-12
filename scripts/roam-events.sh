@@ -35,9 +35,10 @@ heal() { # $1 = mac, $2 = reason, $3 = current bss
   lf="$STATE/$key.lastflush"; lb="$STATE/$key.lastflushbss"
   last=0; [ -f "$lf" ] && last=$(cat "$lf")
   lastbss=""; [ -f "$lb" ] && lastbss=$(cat "$lb")
-  [ $((now - last)) -lt "$MIN_GAP" ] && return 0
+  [ $((now - last)) -lt "$MIN_GAP" ] && { [ "$3" != "$lastbss" ] && [ ! -f "$STATE/$key.pending" ] && echo "$2|$3" > "$STATE/$key.pending"; return 0; }
   [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ] && return 0
   echo "$now" > "$lf"; echo "$3" > "$lb"
+  rm -f "$STATE/$key.pending"
   if [ -f "$FLUSHFLAG" ]; then
     fcctl flush --mac "$1" >/dev/null 2>&1
     logger -t "$TAG" "FLUSHED $1 ($2)"

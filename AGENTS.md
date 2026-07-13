@@ -27,7 +27,7 @@ editing anything.
 - **`fc` is a shell-builtin collision** — always invoke the flow-cache tool
   as `fcctl`.
 - **Never kill/restart `wlceventd` from a shell.** It writes its start line
-  and then receives no driver events — the event feed (and the opt-in
+  and then receives no driver events — the event feed (and the default-on
   listener with it) silently dies. Only `service restart_wireless` (or a
   reboot) restores it. This cost us a day of "wlceventd doesn't log"
   confusion; the events were in `/jffs/wifi_wlc.log` all along.
@@ -65,7 +65,7 @@ editing anything.
 - There is no CI and no router emulator: real validation happens on an
   actual Asuswrt-Merlin router over SSH. Deploy pattern that avoids both
   connection bursts and the self-kill trap:
-  `tar cf - -C scripts roam-detect.sh roamctl | ssh <router> 'tar xf - -C /jffs/scripts && chmod 755 /jffs/scripts/roam* && /jffs/scripts/roamctl restart'`
+  `tar cf - -C scripts roam-detect.sh roam-events.sh roamctl | ssh <router> 'tar xf - -C /jffs/scripts && chmod 755 /jffs/scripts/roam* && /jffs/scripts/roamctl restart'`
 - After deploying: `roamctl status` (expect `running (pid N)` + policy +
   autoflush), then `roamctl log` for the `starting (pid N, ...)` banner.
 - The installer flows are tested by full cycles: `install.sh` →
@@ -78,8 +78,8 @@ editing anything.
 (truth) and the bridge FDB (belief), run a per-client state machine
 (ROAM/DUAL/STALE1→STALE2/OK), and heal via rate-limited per-MAC flush; it
 also retries `*.pending` deferred heals (cross-radio flushes suppressed by
-MIN_GAP). `scripts/roam-events.sh` is the OPT-IN second source
-(`EVENT_HEAL=1` in the conf): tails `/jffs/wifi_wlc.log` (wlceventd's
+MIN_GAP). `scripts/roam-events.sh` is the default-on second source (auto-stands-down without the event log; EVENT_HEAL=0 disables)
+— tails `/jffs/wifi_wlc.log` (wlceventd's
 default event log) and heals within ~1 s of a successful (Re)Assoc, sharing
 the same `/tmp/roam-detect/` cooldown state so the sources never
 double-flush. `scripts/roamctl` is the lifecycle wrapper (start/stop/
@@ -97,7 +97,7 @@ is a user-facing diagnosis skill, not contributor docs.
 - Churn that produces no observable signal at all (no assoc event, no
   assoclist change, no FDB symptom) has no trigger — theorized, never
   observed. Everything observable is covered: net roams + dual-settle
-  (poller), assoc events (opt-in listener), FDB mismatch (backstop),
+  (poller), assoc events (event listener), FDB mismatch (backstop),
   MIN_GAP-suppressed cross-radio flushes (deferred pending retry).
 - The event listener's file source (`/jffs/wifi_wlc.log`) grows on flash and
   its rotation behavior is unknown (ASUS's file, not ours) — worth

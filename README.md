@@ -514,10 +514,15 @@ the top first. Then consider posting your capture in the
 
 ## Discussion
 
-The canonical discussion thread for this bug and tool lives on SNB Forums:
-[RT-BE92U: Wi-Fi client can't reach specific LAN hosts after 5/6 GHz roam — cause found + open-source fix](https://www.snbforums.com/threads/rt-be92u-wi-fi-client-cant-reach-specific-lan-hosts-after-5-6-ghz-roam-cause-found-open-source-fix.97555/)
-— model/firmware reports from other routers are especially welcome there (or
-as GitHub issues here).
+Two SNB Forums threads, split by topic:
+
+- **The bug** (diagnosis, hardware discussion):
+  [RT-BE92U: Wi-Fi client can't reach specific LAN hosts after 5/6 GHz roam](https://www.snbforums.com/threads/rt-be92u-wi-fi-client-cant-reach-specific-lan-hosts-after-5-6-ghz-roam-cause-found-open-source-fix.97555/)
+- **The addon** (support, install help, model/firmware reports):
+  [flowcache-doctor on the Asuswrt-Merlin AddOns forum](https://www.snbforums.com/threads/flowcache-doctor-v0-2-0-auto-heal-for-the-broadcom-flow-cache-roam-blackhole-wi-fi-client-loses-specific-lan-hosts-after-a-band-roam.97561/)
+
+Reports from other router models are especially welcome (there or as GitHub
+issues here).
 
 ## Similar reports in the wild
 

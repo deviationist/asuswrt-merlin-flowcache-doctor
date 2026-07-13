@@ -14,6 +14,7 @@
 # restores the event feed.
 
 EVLOG=/jffs/wifi_wlc.log
+BSSLIST="wl0.1 wl1.1 wl2.1"
 COOLDOWN=60
 MIN_GAP=8
 TAG=roam-events
@@ -60,6 +61,28 @@ tail -n 0 -F "$EVLOG" 2>/dev/null | while read -r line; do
       bss=$(echo "$line" | awk -F': ' '{print $2}')
       mac=$(echo "$line" | grep -oE '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' | head -1 | tr 'A-F' 'a-f')
       [ -n "$mac" ] && [ -n "$bss" ] && heal "$mac" "event assoc on $bss" "$bss"
+      ;;
+    *": Deauth_ind "*|*": Disassoc "*)
+      # A deauth/disassoc from a radio the client is NO LONGER on is the
+      # old radio's delayed station teardown — the exact moment the
+      # eviction race can poison the client's NEW forwarding state
+      # (research mechanism #2, observed live 2026-07-13 12:01). Heal the
+      # client on its CURRENT radio, bypassing the same-radio cooldown
+      # (the preceding assoc-flush is otherwise still fresh).
+      evbss=$(echo "$line" | awk -F': ' '{print $2}')
+      mac=$(echo "$line" | grep -oE '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' | head -1 | tr 'A-F' 'a-f')
+      if [ -n "$mac" ] && [ -n "$evbss" ]; then
+        # Live assoclist lookup (NOT the poller's state file — during churn
+        # that lags by up to a minute, which would mask exactly this race).
+        curbss=""
+        for b in $BSSLIST; do
+          [ "$b" = "$evbss" ] && continue
+          wl -i "$b" assoclist 2>/dev/null | grep -qi "$mac" && { curbss="$b"; break; }
+        done
+        if [ -n "$curbss" ]; then
+          heal "$mac" "stale-radio deauth on $evbss (client on $curbss)" "$curbss" force
+        fi
+      fi
       ;;
   esac
 done

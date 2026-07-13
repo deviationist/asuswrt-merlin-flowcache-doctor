@@ -26,13 +26,26 @@ editing anything.
   state goes to `/tmp` (RAM); syslog via `logger -t roam-detect` (RAM-backed).
 - **`fc` is a shell-builtin collision** — always invoke the flow-cache tool
   as `fcctl`.
+- **Never kill/restart `wlceventd` from a shell.** It writes its start line
+  and then receives no driver events — the event feed (and the opt-in
+  listener with it) silently dies. Only `service restart_wireless` (or a
+  reboot) restores it. This cost us a day of "wlceventd doesn't log"
+  confusion; the events were in `/jffs/wifi_wlc.log` all along.
+- **`heal()` is duplicated** in `roam-detect.sh` and `roam-events.sh`
+  (deliberate: zero risk to the validated poller). If you change one, change
+  both — they must agree on state files, gates, and semantics.
 
 ## Design invariants (do not weaken)
 
 - **Flushes are per-client only** (`fcctl flush --mac`). The daemon must
   never run a global `fcctl flush`; that stays a human command.
-- **Auto-heal is opt-in** (`roamctl flush on` → flag file). Fresh installs
-  are log-only. Don't change the default.
+- **Auto-heal is ON for fresh installs** (installer creates the flush flag;
+  owner decision 2026-07-12: an installed doctor must create value out of
+  the box). Audit-only mode is `roamctl flush off`; **reinstalls/updates
+  must respect the user's existing on/off choice** (the installer only
+  touches the flag on FRESH installs — keep it that way). The event
+  listener is likewise default-on but must auto-stand-down when
+  `/jffs/wifi_wlc.log` doesn't exist (other firmware builds).
 - **Rate limiting**: band-aware cooldown (`COOLDOWN` same-radio, bypass on
   radio change, `MIN_GAP` hard floor). A settle-roam onto a new radio must
   always be allowed to heal; flapping must never cause a flush storm.
@@ -63,11 +76,17 @@ editing anything.
 
 `scripts/roam-detect.sh` is a 2 s busybox loop: gather per-radio assoclists
 (truth) and the bridge FDB (belief), run a per-client state machine
-(ROAM/DUAL/STALE1→STALE2/OK), and heal via rate-limited per-MAC flush.
-`scripts/roamctl` is the lifecycle wrapper (start/stop/restart/status/log/
-policy/flush/boot/watchdog/uninstall) — boot via Merlin's `services-start`,
-crash recovery via a `cru` cron watchdog every 60 s, both honoring the
-persistent policy file and the runtime stop flag. `install.sh`/`uninstall.sh`
+(ROAM/DUAL/STALE1→STALE2/OK), and heal via rate-limited per-MAC flush; it
+also retries `*.pending` deferred heals (cross-radio flushes suppressed by
+MIN_GAP). `scripts/roam-events.sh` is the OPT-IN second source
+(`EVENT_HEAL=1` in the conf): tails `/jffs/wifi_wlc.log` (wlceventd's
+default event log) and heals within ~1 s of a successful (Re)Assoc, sharing
+the same `/tmp/roam-detect/` cooldown state so the sources never
+double-flush. `scripts/roamctl` is the lifecycle wrapper (start/stop/
+restart/status/log/policy/flush/boot/watchdog/uninstall) managing both
+daemons — boot via Merlin's `services-start`, crash recovery via a `cru`
+cron watchdog every 60 s, both honoring the persistent policy file and the
+runtime stop flag. `install.sh`/`uninstall.sh`
 run on the router (curl-pipe-sh or from a checkout — local files preferred);
 `setup.sh` is the interactive workstation-side guide (SSH multiplexed, reads
 prompts from `/dev/tty` so curl-pipe works). `.claude/skills/flowcache-doctor`
@@ -75,12 +94,14 @@ is a user-facing diagnosis skill, not contributor docs.
 
 ## Known open problems (good first issues for agents)
 
-- `wlceventd` event-driven detection: `wlceventd_msglevel=1` + syslogd `-l 7`
-  produced no events on 3006.102.8 despite the binary containing Assoc/Deauth
-  format strings. Cracking this closes the polling detector's storm blind spot.
-- `wl assoclist` goes blind during rapid roam storms — missed roams get no
-  proactive flush (the stale-FDB backstop catches the FDB-visible subset).
-- Churn that never surfaces in the assoclist at all (no DUAL, no roam, no FDB
-  symptom) has no trigger — theorized, never observed. The dual-settle trigger
-  (added 2026-07-12 after a live miss) already closed the observable variant:
-  there-and-back bounces inside a DUAL window.
+- Churn that produces no observable signal at all (no assoc event, no
+  assoclist change, no FDB symptom) has no trigger — theorized, never
+  observed. Everything observable is covered: net roams + dual-settle
+  (poller), assoc events (opt-in listener), FDB mismatch (backstop),
+  MIN_GAP-suppressed cross-radio flushes (deferred pending retry).
+- The event listener's file source (`/jffs/wifi_wlc.log`) grows on flash and
+  its rotation behavior is unknown (ASUS's file, not ours) — worth
+  characterizing before recommending EVENT_HEAL widely.
+- SOLVED 2026-07-12 (context): the "wlceventd doesn't log" mystery — it logs
+  to `/jffs/wifi_wlc.log` by default, not syslog; our own shell-restarts had
+  killed its driver-event subscription. See Hard constraints.

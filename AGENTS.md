@@ -34,6 +34,12 @@ editing anything.
 - **`heal()` is duplicated** in `roam-detect.sh` and `roam-events.sh`
   (deliberate: zero risk to the validated poller). If you change one, change
   both — they must agree on state files, gates, and semantics.
+- **No development-setup specifics in shipped code** — no real IPs, client
+  MACs, hostnames, or SSIDs from anyone's network, not even in comments
+  (use `AA:BB:CC:DD:EE:FF` / `192.168.1.x` style placeholders).
+  *Model*-specific defaults (interface names, firmware paths like the
+  wlceventd log) are acceptable ONLY as documented defaults that the conf
+  file can override — define them before the `. "$CONF"` line.
 
 ## Design invariants (do not weaken)
 

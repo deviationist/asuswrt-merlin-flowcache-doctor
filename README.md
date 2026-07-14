@@ -564,6 +564,14 @@ If your case matches, consider posting your `probe-pack` capture in the
 [RMerlin RT-BE92U feedback thread](https://www.snbforums.com/threads/looking-for-feedback-rt-be92u-stability-issues.96798/)
 — that's the channel that reaches ASUS.
 
+## Sibling project
+
+Locking down which IPs may reach your router's admin (Web UI / SSH) and hitting
+ASUS's 4-entry cap on the access-restriction list? See
+[asuswrt-merlin-accessctl](https://github.com/deviationist/asuswrt-merlin-accessctl)
+— it manages more than 4 admin-allowed IPs past the GUI's JavaScript-only limit,
+additively and lock-out-safe. Also developed on the RT-BE92U.
+
 ## Credits & sources
 
 - Mechanism analysis draws on the Broadcom driver sources visible in the

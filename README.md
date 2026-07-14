@@ -210,7 +210,13 @@ the correct slow path within a second). Flushes are rate-limited with a
 **band-aware cooldown**: one flush per client per 60 s on the same radio,
 but a roam onto a *different* radio bypasses the cooldown (the settle-roam
 after a steering storm must always heal), with a hard 8 s floor so rapid
-flapping can't turn the bypass into a flush storm. Skeptics can switch to
+flapping can't turn the bypass into a flush storm. A same-radio roam that
+lands *inside* the 60 s cooldown is **deferred, not dropped** — it leaves a
+pending marker and heals once the 8 s floor clears. This closes a real hole
+(fixed **v0.2.2**): a client flip-flopping on one band could roam back onto a
+just-flushed radio within the cooldown, and that roam's flush was silently
+*lost* — leaving a stale flow that, if the host was idle (no traffic → no
+`STALE-FDB` symptom to re-trigger healing), stayed poisoned until first use. Skeptics can switch to
 audit-only mode with `roamctl flush off` — detection keeps running and logs
 `WOULD FLUSH` lines showing exactly what it *would* have done (re-arming is
 `roamctl flush on`; reinstalls and updates respect your choice). Clients

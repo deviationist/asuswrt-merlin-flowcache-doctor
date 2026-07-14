@@ -42,7 +42,14 @@ heal() { # $1 = mac, $2 = reason, $3 = current bss
   last=0; [ -f "$lf" ] && last=$(cat "$lf")
   lastbss=""; [ -f "$lb" ] && lastbss=$(cat "$lb")
   [ $((now - last)) -lt "$MIN_GAP" ] && { [ "$3" != "$lastbss" ] && [ ! -f "$STATE/$key.pending" ] && echo "$2|$3" > "$STATE/$key.pending"; return 0; }
-  [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ] && return 0
+  if [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ]; then
+    # Same-radio flush within cooldown: DON'T silently drop a genuine roam's
+    # heal (a roam is one-shot; it won't re-fire on its own). Leave a pending
+    # marker — the poller (roam-detect.sh) drains it past the MIN_GAP floor.
+    # Symmetric with the MIN_GAP deferral above; MIN_GAP still caps the rate.
+    [ ! -f "$STATE/$key.pending" ] && echo "$2|$3" > "$STATE/$key.pending"
+    return 0
+  fi
   echo "$now" > "$lf"; echo "$3" > "$lb"
   rm -f "$STATE/$key.pending"
   if [ -f "$FLUSHFLAG" ]; then

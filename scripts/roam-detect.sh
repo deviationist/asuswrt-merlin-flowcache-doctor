@@ -47,7 +47,16 @@ heal() { # $1 = mac, $2 = reason, $3 = current bss, $4 = "force" bypasses same-r
   last=0; [ -f "$lf" ] && last=$(cat "$lf")
   lastbss=""; [ -f "$lb" ] && lastbss=$(cat "$lb")
   [ $((now - last)) -lt "$MIN_GAP" ] && { [ "$3" != "$lastbss" ] && [ ! -f "$STATE/$key.pending" ] && echo "$2|$3" > "$STATE/$key.pending"; return 0; }
-  [ "$4" != "force" ] && [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ] && return 0
+  if [ "$4" != "force" ] && [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ]; then
+    # Same-radio flush within cooldown: DON'T silently drop a genuine roam's
+    # heal. A roam is a one-shot event (unlike stale-fdb it won't re-fire on
+    # its own), so a dropped roam-flush is lost forever — the exact hole that
+    # let an idle host's flow stay poisoned. Leave a pending marker so it's
+    # retried past the MIN_GAP floor, symmetric with the MIN_GAP deferral
+    # above. MIN_GAP still caps the per-client flush rate, so no storm.
+    [ ! -f "$STATE/$key.pending" ] && echo "$2|$3" > "$STATE/$key.pending"
+    return 0
+  fi
   echo "$now" > "$lf"; echo "$3" > "$lb"
   rm -f "$STATE/$key.pending"
   if [ -f "$FLUSHFLAG" ]; then

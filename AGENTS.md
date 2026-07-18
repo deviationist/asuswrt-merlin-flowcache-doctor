@@ -35,6 +35,14 @@ editing anything.
   listener with it) silently dies. Only `service restart_wireless` (or a
   reboot) restores it. This cost us a day of "wlceventd doesn't log"
   confusion; the events were in `/jffs/wifi_wlc.log` all along.
+- **No `tail | while read` in daemons** — the read-loop runs in a pipeline
+  SUBSHELL that survives a kill of its parent. The orphaned loop keeps
+  running pre-update code, and because it shows up in the `{script.sh}` ps
+  fallback it convinces the lifecycle code a daemon is already running, so
+  restarts silently no-op (bit us live 2026-07-18: the event listener
+  skipped four consecutive updates). Read through a FIFO instead, with a
+  `trap` that kills the background tail — the worker loop must live in the
+  process whose pid is in the pidfile.
 - **A running script must never have its file overwritten** — busybox `sh`
   reads scripts incrementally, so rewriting an executing file is undefined
   behavior. This is why `roamctl update` downloads the installer to `/tmp`

@@ -63,7 +63,20 @@ heal() { # $1 = mac, $2 = reason, $3 = current bss, $4 = "force" bypasses same-r
 
 # Event lines look like:
 #   Sun Jul 12 16:44:43 2026  [notice] wlceventd_proc_event(744): wl2.1: Assoc AA:BB:CC:DD:EE:FF, status: Successful (0), rssi:-77
-tail -n 0 -F "$EVLOG" 2>/dev/null | while read -r line; do
+#
+# Read the tail through a FIFO so the read-loop runs in THIS shell — the
+# process whose pid is in the pidfile. A plain `tail | while read` puts the
+# loop in a pipeline SUBSHELL that survives a kill of the parent: an orphan
+# that keeps healing with pre-update code and, by matching the ps fallback,
+# convinces start_ev a listener is already running (bit us live 2026-07-18 —
+# the listener silently skipped four consecutive updates). The trap tears
+# the background tail down with us.
+FIFO="$STATE/.evfifo"
+rm -f "$FIFO"; mkfifo "$FIFO" || { logger -t "$TAG" "cannot create FIFO $FIFO — exiting"; exit 1; }
+tail -n 0 -F "$EVLOG" > "$FIFO" 2>/dev/null &
+TAILPID=$!
+trap 'kill $TAILPID 2>/dev/null; rm -f "$FIFO"' EXIT INT TERM
+while read -r line; do
   case "$line" in
     *": Assoc "*Successful*|*": ReAssoc "*Successful*)
       bss=$(echo "$line" | awk -F': ' '{print $2}')
@@ -93,4 +106,7 @@ tail -n 0 -F "$EVLOG" 2>/dev/null | while read -r line; do
       fi
       ;;
   esac
-done
+done < "$FIFO"
+# EOF on the FIFO (tail died, e.g. log rotation edge) ends the loop; exit
+# and let the 60s watchdog start a fresh listener.
+logger -t "$TAG" "event feed ended (pid $$) — exiting; the watchdog will restart the listener"

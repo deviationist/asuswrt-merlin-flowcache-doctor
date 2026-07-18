@@ -76,6 +76,48 @@ case "$1" in
             if events_enabled && [ -z "$(epids)" ]; then
               logger -t "$TAG" "watchdog: event listener not running, restarting"; "$EVDAEMON" >/dev/null 2>&1 &
             fi ;;
+  health)   rc=0
+            ok()   { echo "  ok:   $1"; }
+            bad()  { echo "  FAIL: $1"; rc=1; }
+            note() { echo "  warn: $1"; }
+            echo "flowcache-doctor $VERSION health check"
+            # --- install integrity ---
+            [ "$(nvram get jffs2_scripts)" = "1" ] && ok "JFFS custom scripts enabled" || bad "JFFS custom scripts disabled (nvram jffs2_scripts)"
+            for f in "$DAEMON" "$EVDAEMON"; do
+              [ -x "$f" ] && ok "present+executable: $f" || bad "missing or not executable: $f"
+            done
+            SS=/jffs/scripts/services-start
+            grep -q "roamctl boot" "$SS" 2>/dev/null && ok "boot hook in services-start" || bad "boot hook missing from services-start"
+            grep -q "roam-detect-wd" "$SS" 2>/dev/null && ok "watchdog registration in services-start" || bad "watchdog registration missing from services-start"
+            cru l 2>/dev/null | grep -q "roam-detect-wd" && ok "cron watchdog armed" || bad "cron watchdog not registered (cru l)"
+            command -v fcctl >/dev/null 2>&1 && ok "fcctl available" || bad "fcctl not found — healing impossible on this firmware"
+            # --- config + radios ---
+            if [ -f "$CONF" ]; then
+              sh -n "$CONF" 2>/dev/null && ok "conf parses: $CONF" || bad "conf has syntax errors: $CONF"
+            fi
+            BSSLIST="wl0.1 wl1.1 wl2.1"; [ -f "$CONF" ] && . "$CONF"
+            for b in $BSSLIST; do
+              if [ -d "/sys/class/net/$b" ]; then
+                [ -d "/sys/class/net/br0/brif/$b" ] && ok "BSS $b exists, member of br0" || note "BSS $b exists but is NOT in br0 — check BSSLIST"
+              else
+                bad "BSS $b does not exist — set BSSLIST in $CONF (br0 members: $(ls /sys/class/net/br0/brif 2>/dev/null | tr '\n' ' '))"
+              fi
+            done
+            # --- runtime ---
+            [ "$(policy)" = "on" ] && ok "policy on" || note "policy off — daemons disabled persistently (roamctl policy on)"
+            [ -f "$FLUSHFLAG" ] && ok "auto-flush on" || note "auto-flush off — audit-only mode (roamctl flush on)"
+            p=$(pids)
+            [ -n "$p" ] && ok "poller running (pid $p)" || bad "poller NOT running"
+            if events_enabled; then
+              ep=$(epids)
+              [ -n "$ep" ] && ok "event listener running (pid $ep)" || bad "event listener enabled but NOT running"
+            elif [ "$EVENT_HEAL" = "0" ]; then note "event listener disabled by conf (EVENT_HEAL=0)"
+            elif [ ! -f /jffs/wifi_wlc.log ]; then note "event listener standing down: no /jffs/wifi_wlc.log on this firmware (poller covers healing)"
+            else note "event listener off"
+            fi
+            [ -d /tmp/roam-detect ] && ok "state dir present (/tmp/roam-detect)" || note "state dir absent (created on the daemon's first pass)"
+            if [ $rc -eq 0 ]; then echo "healthy."; else echo "PROBLEMS FOUND — see FAIL lines above."; fi
+            exit $rc ;;
   update)   echo "flowcache-doctor $VERSION — fetching the latest installer from GitHub (main)..."
             curl -fsSL "$REPO_RAW/install.sh" -o "$UPDATE_TMP" || { echo "ERROR: download failed — does the router have internet access?"; exit 1; }
             # exec, don't run-and-return: the installer overwrites this very
@@ -95,5 +137,5 @@ case "$1" in
             logger -t "$TAG" "uninstalled"
             echo "flowcache-doctor uninstalled."
             rm -f "$0" ;;
-  *)        echo "usage: roamctl start|stop|restart|status|log|watchdog|boot|policy [on|off]|flush [on|off]|update|uninstall" ;;
+  *)        echo "usage: roamctl start|stop|restart|status|health|log|watchdog|boot|policy [on|off]|flush [on|off]|update|uninstall" ;;
 esac

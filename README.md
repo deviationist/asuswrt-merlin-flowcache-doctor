@@ -327,6 +327,13 @@ policy are all preserved (the installer only creates the flush flag on
 saves you looking it up. `roamctl status` shows the version you're
 running.
 
+Every install and update ends with a **health check** (`roamctl
+health`) that verifies the whole installation: scripts present, boot
+hook + cron watchdog wired, `fcctl` available, `BSSLIST` matching the
+interfaces that actually exist on your model, both daemons running.
+Run it any time — it exits non-zero if anything is broken, so it's
+also scriptable.
+
 ## Uninstall
 
 Just as clean, three equivalent ways:
@@ -425,7 +432,9 @@ by any of the uninstall paths:
 ## Usage
 
 ```
-roamctl status          # running? policy? auto-flush?
+roamctl status          # running? policy? auto-flush? version?
+roamctl health          # full check: artifacts, hooks, watchdog, fcctl,
+                        #   BSSLIST vs real interfaces, daemons, listener
 roamctl log             # last 30 detection events (from syslog)
 roamctl flush on|off    # enable/disable auto-heal (persistent; default off)
 roamctl stop            # stop + disarm watchdog (until start or reboot)

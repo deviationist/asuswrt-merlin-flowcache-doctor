@@ -89,8 +89,11 @@ editing anything.
   actual Asuswrt-Merlin router over SSH. Deploy pattern that avoids both
   connection bursts and the self-kill trap:
   `tar cf - -C scripts roam-detect.sh roam-events.sh roamctl | ssh <router> 'tar xf - -C /jffs/scripts && chmod 755 /jffs/scripts/roam* && /jffs/scripts/roamctl restart'`
-- After deploying: `roamctl status` (expect `running (pid N)` + policy +
-  autoflush), then `roamctl log` for the `starting (pid N, ...)` banner.
+- After deploying: `roamctl health` (full artifact + runtime check, exits
+  non-zero on any FAIL — the installer and `roamctl update` run it
+  automatically at the end), then `roamctl log` for the
+  `starting (pid N, ...)` banner. Keep `health` in sync with the artifact
+  inventory: a new artifact means a new health check line.
 - The installer flows are tested by full cycles: `install.sh` →
   verify artifacts → `uninstall` path → verify **zero residue** (files,
   processes, cron entry, `services-start` lines, `/tmp/roam-detect`).
@@ -106,7 +109,7 @@ rate-limit gate — see *Never-drop deferral* above). `scripts/roam-events.sh` i
 default event log) and heals within ~1 s of a successful (Re)Assoc, sharing
 the same `/tmp/roam-detect/` cooldown state so the sources never
 double-flush. `scripts/roamctl` is the lifecycle wrapper (start/stop/
-restart/status/log/policy/flush/boot/watchdog/update/uninstall) managing both
+restart/status/health/log/policy/flush/boot/watchdog/update/uninstall) managing both
 daemons — boot via Merlin's `services-start`, crash recovery via a `cru`
 cron watchdog every 60 s, both honoring the persistent policy file and the
 runtime stop flag. `install.sh`/`uninstall.sh`

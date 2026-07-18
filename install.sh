@@ -60,7 +60,7 @@ grep -q "$CRU_ID" "$SS" || echo "cru a $CRU_ID \"* * * * * $DEST/roamctl watchdo
 cru a "$CRU_ID" "* * * * * $DEST/roamctl watchdog"
 "$DEST/roamctl" start
 sleep 2
-"$DEST/roamctl" status
+"$DEST/roamctl" health
 
 cat <<'EOF'
 
@@ -75,6 +75,7 @@ ls /sys/class/net/br0/brif/).
 Useful commands:
   /jffs/scripts/roamctl log         # what it has detected and healed
   /jffs/scripts/roamctl status      # running? healing? listener? version?
+  /jffs/scripts/roamctl health      # full install + runtime health check
   /jffs/scripts/roamctl flush off   # audit-only mode (log, don't heal)
   /jffs/scripts/roamctl policy off  # disable persistently
   /jffs/scripts/roamctl update      # self-update to the latest version

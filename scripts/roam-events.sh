@@ -35,14 +35,14 @@ logger -t "$TAG" "starting (pid $$, source: $EVLOG)"
 # Same state files as roam-detect.sh — both sources share per-client cooldowns,
 # so a client healed by one source won't be immediately re-flushed by the other.
 # (Duplicated from roam-detect.sh heal(); keep the two in sync — see AGENTS.md.)
-heal() { # $1 = mac, $2 = reason, $3 = current bss
+heal() { # $1 = mac, $2 = reason, $3 = current bss, $4 = "force" bypasses same-radio cooldown
   now=$(date +%s)
   key=$(echo "$1" | tr -d :)
   lf="$STATE/$key.lastflush"; lb="$STATE/$key.lastflushbss"
   last=0; [ -f "$lf" ] && last=$(cat "$lf")
   lastbss=""; [ -f "$lb" ] && lastbss=$(cat "$lb")
-  [ $((now - last)) -lt "$MIN_GAP" ] && { [ "$3" != "$lastbss" ] && [ ! -f "$STATE/$key.pending" ] && echo "$2|$3" > "$STATE/$key.pending"; return 0; }
-  if [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ]; then
+  [ $((now - last)) -lt "$MIN_GAP" ] && { { [ "$4" = "force" ] || [ "$3" != "$lastbss" ]; } && [ ! -f "$STATE/$key.pending" ] && echo "$2|$3" > "$STATE/$key.pending"; return 0; }
+  if [ "$4" != "force" ] && [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ]; then
     # Same-radio flush within cooldown: DON'T silently drop a genuine roam's
     # heal (a roam is one-shot; it won't re-fire on its own). Leave a pending
     # marker — the poller (roam-detect.sh) drains it past the MIN_GAP floor.

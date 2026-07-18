@@ -216,7 +216,12 @@ pending marker and heals once the 8 s floor clears. This closes a real hole
 (fixed **v0.2.2**): a client flip-flopping on one band could roam back onto a
 just-flushed radio within the cooldown, and that roam's flush was silently
 *lost* — leaving a stale flow that, if the host was idle (no traffic → no
-`STALE-FDB` symptom to re-trigger healing), stayed poisoned until first use. Skeptics can switch to
+`STALE-FDB` symptom to re-trigger healing), stayed poisoned until first use.
+**v0.2.3** extends the same never-drop rule to *forced* heals (stale-radio
+deauth, dual-settle) landing inside the 8 s floor — previously dropped on a
+same-radio repeat, exactly the common deauth-after-assoc timing — and fixes
+the event listener's `heal()` to honor the cooldown bypass its stale-radio
+deauth path was already requesting. Skeptics can switch to
 audit-only mode with `roamctl flush off` — detection keeps running and logs
 `WOULD FLUSH` lines showing exactly what it *would* have done (re-arming is
 `roamctl flush on`; reinstalls and updates respect your choice). Clients
@@ -240,9 +245,10 @@ down with a log line and the poller carries everything (disable explicitly
 with `EVENT_HEAL=0` in the conf). One caution baked into the design:
 `wlceventd` only emits events when started by init — if it's ever killed and
 restarted from a shell it goes silent, and only `service restart_wireless`
-(or a reboot) restores the feed. Cross-radio flushes suppressed by the
+(or a reboot) restores the feed. Flushes suppressed by the
 anti-storm floor leave a *pending marker* that the poller retries seconds
-later (covers rapid multi-hop reconnects like off → 2.4 GHz → 6 GHz).
+later (covers rapid multi-hop reconnects like off → 2.4 GHz → 6 GHz, and
+the stale-radio deauth heal arriving seconds after an assoc flush).
 
 ## Claude Code skill
 
@@ -339,8 +345,10 @@ Until confirmed fixed, the tool is cheap insurance: one idle shell loop, logs
 only on real events, and uninstalls in one command.
 
 If your SSIDs don't live on `wl0.1`/`wl1.1`/`wl2.1` (varies by model and
-config — list bridge members with `ls /sys/class/net/br0/brif/`), edit
-`BSSLIST` at the top of `/jffs/scripts/roam-detect.sh` after installing.
+config — list bridge members with `ls /sys/class/net/br0/brif/`), set
+`BSSLIST` in `/jffs/scripts/roam-detect.conf` (see *Tuning* below). One
+line there covers both daemons — don't edit the scripts themselves; those
+edits are lost on update.
 
 ### Manual install (for the tech-savvy — no scripts, full control)
 
@@ -416,7 +424,9 @@ over downloading.
 ### Tuning (optional config file)
 
 Create `/jffs/scripts/roam-detect.conf` to override the defaults — it's
-plain shell sourced by the daemon, it survives updates and reinstalls (the
+plain shell sourced by **both** daemons (the poller *and* the event
+listener read the same file, so every setting — `BSSLIST` included — is
+set once and applies to both), it survives updates and reinstalls (the
 installer never touches it), and all uninstall paths remove it:
 
 ```sh
@@ -501,6 +511,15 @@ the top first. Then consider posting your capture in the
   outage while ~2 minutes of quiet lets it starve. Monitoring pings count
   as traffic (we proved this on ourselves — twice).
 - BSS interface names vary by model/config — set `BSSLIST` accordingly.
+- **AiMesh: only the router's own radios are watched.** The doctor runs on
+  the router and detects/heals roams between the router's radios (plus
+  roams *onto* them from elsewhere, via the assoc event). Clients
+  associated to an AiMesh *node* are invisible to it — from the router's
+  perspective they sit behind the backhaul port, and the node's radios
+  never appear in `BSSLIST` (they're the node's, not the router's). Roams
+  node→node or router→node are therefore not healed. Whether the doctor
+  can usefully run *on* a Merlin-flashed node is untested — reports
+  welcome.
 - The event listener depends on ASUS's `wlceventd` logger staying healthy;
   killed-and-shell-restarted wlceventd goes silent (see caution above). The
   poller is deliberately kept as the always-on primary for exactly this

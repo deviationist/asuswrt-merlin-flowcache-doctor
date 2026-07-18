@@ -46,7 +46,7 @@ heal() { # $1 = mac, $2 = reason, $3 = current bss, $4 = "force" bypasses same-r
   lf="$STATE/$key.lastflush"; lb="$STATE/$key.lastflushbss"
   last=0; [ -f "$lf" ] && last=$(cat "$lf")
   lastbss=""; [ -f "$lb" ] && lastbss=$(cat "$lb")
-  [ $((now - last)) -lt "$MIN_GAP" ] && { [ "$3" != "$lastbss" ] && [ ! -f "$STATE/$key.pending" ] && echo "$2|$3" > "$STATE/$key.pending"; return 0; }
+  [ $((now - last)) -lt "$MIN_GAP" ] && { { [ "$4" = "force" ] || [ "$3" != "$lastbss" ]; } && [ ! -f "$STATE/$key.pending" ] && echo "$2|$3" > "$STATE/$key.pending"; return 0; }
   if [ "$4" != "force" ] && [ $((now - last)) -lt "$COOLDOWN" ] && [ "$3" = "$lastbss" ]; then
     # Same-radio flush within cooldown: DON'T silently drop a genuine roam's
     # heal. A roam is a one-shot event (unlike stale-fdb it won't re-fire on

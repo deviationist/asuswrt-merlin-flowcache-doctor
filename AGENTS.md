@@ -55,6 +55,13 @@ editing anything.
 - **Rate limiting**: band-aware cooldown (`COOLDOWN` same-radio, bypass on
   radio change, `MIN_GAP` hard floor). A settle-roam onto a new radio must
   always be allowed to heal; flapping must never cause a flush storm.
+- **Never-drop deferral** (v0.2.2/v0.2.3): a heal suppressed by either gate
+  is *deferred* via a `*.pending` marker (drained by the poller past the
+  `MIN_GAP` floor), never silently dropped — one-shot triggers (roam,
+  stale-radio deauth, dual-settle) won't re-fire on their own, so a dropped
+  flush is lost forever. `force` bypasses the same-radio `COOLDOWN` but
+  never `MIN_GAP`; a forced heal landing inside the floor defers like any
+  other. Don't reintroduce a bare `return 0` in either gate.
 - **DUAL guard**: clients listed in two radios' assoclists simultaneously
   are parked, not acted on. Acting on ambiguous membership caused log spam
   and would cause flush churn.
@@ -83,8 +90,8 @@ editing anything.
 `scripts/roam-detect.sh` is a 2 s busybox loop: gather per-radio assoclists
 (truth) and the bridge FDB (belief), run a per-client state machine
 (ROAM/DUAL/STALE1→STALE2/OK), and heal via rate-limited per-MAC flush; it
-also retries `*.pending` deferred heals (cross-radio flushes suppressed by
-MIN_GAP). `scripts/roam-events.sh` is the default-on second source (auto-stands-down without the event log; EVENT_HEAL=0 disables)
+also retries `*.pending` deferred heals (any flush suppressed by a
+rate-limit gate — see *Never-drop deferral* above). `scripts/roam-events.sh` is the default-on second source (auto-stands-down without the event log; EVENT_HEAL=0 disables)
 — tails `/jffs/wifi_wlc.log` (wlceventd's
 default event log) and heals within ~1 s of a successful (Re)Assoc, sharing
 the same `/tmp/roam-detect/` cooldown state so the sources never
@@ -104,7 +111,24 @@ is a user-facing diagnosis skill, not contributor docs.
   assoclist change, no FDB symptom) has no trigger — theorized, never
   observed. Everything observable is covered: net roams + dual-settle
   (poller), assoc events (event listener), FDB mismatch (backstop),
-  MIN_GAP-suppressed cross-radio flushes (deferred pending retry).
+  gate-suppressed flushes (deferred pending retry).
+- **AiMesh departure gap** (surfaced by a 3×BE92U field report, 2026-07-18):
+  a roam *away* from this unit (client vanishes to an AiMesh node, never
+  reappearing on a local radio) leaves the departed unit's stale flow
+  entries unhealed — no trigger fires. Candidate fix: heal on
+  deauth/disassoc even when the client doesn't reappear in any local
+  assoclist (flushing a departed client is harmless; rate limits still
+  apply). Publicly promised as "in the works" in the addon forum thread.
+  Related: clients associated to a node are entirely outside detection
+  (README → Limitations), and whether the doctor runs on a Merlin-flashed
+  node is untested.
+- **MLO (Wi-Fi 7 Multi-Link Operation) is uncharacterized**: the doctor's
+  model assumes a client is associated to exactly one BSS at a time; an
+  STA MLD is legitimately on multiple radios under one association, band
+  switches happen without roam events, and we have zero data on how
+  Broadcom exposes MLD clients in `wl assoclist` / `br0` membership (could
+  look like a permanent `DUAL` state). Need a capture from an MLO-enabled
+  setup before trusting the doctor there.
 - The event listener's file source (`/jffs/wifi_wlc.log`) grows on flash and
   its rotation behavior is unknown (ASUS's file, not ours) — worth
   characterizing before recommending EVENT_HEAL widely.

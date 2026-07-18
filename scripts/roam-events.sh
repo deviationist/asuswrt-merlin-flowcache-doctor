@@ -1,12 +1,13 @@
 #!/bin/sh
-# roam-events.sh — flowcache-doctor OPT-IN event listener (wlceventd source).
+# roam-events.sh — flowcache-doctor event listener (wlceventd source).
 #
 # Tails the Broadcom driver's own association log (/jffs/wifi_wlc.log, written
 # by wlceventd by default on this firmware) and heals a client the moment it
 # (re)associates — sub-second reaction, immune to the polling detector's storm
-# blind spots. The 2 s polling daemon (roam-detect.sh) remains the primary and
-# default; enable this listener with EVENT_HEAL=1 in /jffs/scripts/roam-detect.conf
-# (roamctl start/stop/watchdog manage it automatically when enabled).
+# blind spots. Default-on when the event log exists (stands down otherwise);
+# disable with EVENT_HEAL=0 in /jffs/scripts/roam-detect.conf. The 2 s polling
+# daemon (roam-detect.sh) remains the always-on primary
+# (roamctl start/stop/watchdog manage both automatically).
 #
 # CAUTION (learned the hard way): wlceventd only logs events when started by
 # init. If it is ever killed and restarted from a shell, it writes a start

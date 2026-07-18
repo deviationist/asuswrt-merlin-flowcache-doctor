@@ -517,9 +517,18 @@ the top first. Then consider posting your capture in the
   associated to an AiMesh *node* are invisible to it — from the router's
   perspective they sit behind the backhaul port, and the node's radios
   never appear in `BSSLIST` (they're the node's, not the router's). Roams
-  node→node or router→node are therefore not healed. Whether the doctor
+  node→node or router→node are therefore not healed (a heal-on-departure
+  trigger to cover the router→node case is planned). Whether the doctor
   can usefully run *on* a Merlin-flashed node is untested — reports
   welcome.
+- **MLO (Wi-Fi 7 Multi-Link Operation) is uncharacterized.** The doctor's
+  truth source assumes a client is associated to exactly one radio at a
+  time; an MLO client is legitimately on several at once, and band
+  switches happen inside the multi-link association without roam events.
+  How Broadcom exposes MLO clients in `wl assoclist` (and whether the
+  flow-cache bug even manifests the same way without classic roams) is
+  unknown — if you run MLO, an audit-mode log capture would be a valuable
+  report.
 - The event listener depends on ASUS's `wlceventd` logger staying healthy;
   killed-and-shell-restarted wlceventd goes silent (see caution above). The
   poller is deliberately kept as the always-on primary for exactly this

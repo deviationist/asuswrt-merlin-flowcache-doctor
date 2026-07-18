@@ -15,6 +15,10 @@ editing anything.
   fails with "command: not found" (a false negative that looks like foo is
   missing; bit us in `roamctl health` on 2026-07-18). Probe binaries with
   `which foo` (returns 1 on missing) or the `type` builtin instead.
+- **No `mkfifo` applet either** (also 2026-07-18) — use
+  `mkfifo || mknod <path> p` as a fallback chain; `mknod` is present. The
+  applet set on this firmware is trimmed: before relying on ANY busybox
+  applet, verify with `which` on the router.
 - **No `pgrep`/`pkill` on the router** — busybox there doesn't ship them.
   Process discovery uses the pidfile (`/tmp/roam-detect.pid`) with the
   daemon's distinctive `{roam-detect.sh}` ps form as orphan fallback.

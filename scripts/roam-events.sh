@@ -72,7 +72,9 @@ heal() { # $1 = mac, $2 = reason, $3 = current bss, $4 = "force" bypasses same-r
 # the listener silently skipped four consecutive updates). The trap tears
 # the background tail down with us.
 FIFO="$STATE/.evfifo"
-rm -f "$FIFO"; mkfifo "$FIFO" || { logger -t "$TAG" "cannot create FIFO $FIFO — exiting"; exit 1; }
+# NB: this busybox has no mkfifo applet — mknod <path> p is the fallback
+rm -f "$FIFO"
+mkfifo "$FIFO" 2>/dev/null || mknod "$FIFO" p 2>/dev/null || { logger -t "$TAG" "cannot create FIFO $FIFO — exiting"; exit 1; }
 tail -n 0 -F "$EVLOG" > "$FIFO" 2>/dev/null &
 TAILPID=$!
 trap 'kill $TAILPID 2>/dev/null; rm -f "$FIFO"' EXIT INT TERM

@@ -11,6 +11,10 @@ editing anything.
   installers. No bash, no arrays, no `[[`, no `local` outside functions'
   simple use, no process substitution. Check with `sh -n <file>` before
   committing — it's the repo's only lint.
+- **No `command` builtin on the router's busybox sh** — `command -v foo`
+  fails with "command: not found" (a false negative that looks like foo is
+  missing; bit us in `roamctl health` on 2026-07-18). Probe binaries with
+  `which foo` (returns 1 on missing) or the `type` builtin instead.
 - **No `pgrep`/`pkill` on the router** — busybox there doesn't ship them.
   Process discovery uses the pidfile (`/tmp/roam-detect.pid`) with the
   daemon's distinctive `{roam-detect.sh}` ps form as orphan fallback.

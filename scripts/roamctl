@@ -90,7 +90,8 @@ case "$1" in
             grep -q "roamctl boot" "$SS" 2>/dev/null && ok "boot hook in services-start" || bad "boot hook missing from services-start"
             grep -q "roam-detect-wd" "$SS" 2>/dev/null && ok "watchdog registration in services-start" || bad "watchdog registration missing from services-start"
             cru l 2>/dev/null | grep -q "roam-detect-wd" && ok "cron watchdog armed" || bad "cron watchdog not registered (cru l)"
-            command -v fcctl >/dev/null 2>&1 && ok "fcctl available" || bad "fcctl not found — healing impossible on this firmware"
+            # NB: this busybox has no `command` builtin — probe with `which`
+            which fcctl >/dev/null 2>&1 && ok "fcctl available" || bad "fcctl not found — healing impossible on this firmware"
             # --- config + radios ---
             if [ -f "$CONF" ]; then
               sh -n "$CONF" 2>/dev/null && ok "conf parses: $CONF" || bad "conf has syntax errors: $CONF"

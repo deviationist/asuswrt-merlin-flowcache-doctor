@@ -43,7 +43,8 @@ for f in roam-detect.sh roam-events.sh roamctl; do
   if [ -f "./scripts/$f" ]; then
     cp "./scripts/$f" "$DEST/$f"
   else
-    curl -fsSL "$REPO_RAW/scripts/$f" -o "$DEST/$f" || fail "download of $f failed"
+    # ?cb= busts the raw CDN cache — see roamctl update
+    curl -fsSL "$REPO_RAW/scripts/$f?cb=$(date +%s)" -o "$DEST/$f" || fail "download of $f failed"
   fi
   chmod 755 "$DEST/$f"
 done

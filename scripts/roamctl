@@ -120,7 +120,10 @@ case "$1" in
             if [ $rc -eq 0 ]; then echo "healthy."; else echo "PROBLEMS FOUND — see FAIL lines above."; fi
             exit $rc ;;
   update)   echo "flowcache-doctor $VERSION — fetching the latest installer from GitHub (main)..."
-            curl -fsSL "$REPO_RAW/install.sh" -o "$UPDATE_TMP" || { echo "ERROR: download failed — does the router have internet access?"; exit 1; }
+            # ?cb= busts the raw.githubusercontent.com CDN cache (the query
+            # string is part of its cache key; without it, a just-pushed fix
+            # can take many minutes to be served)
+            curl -fsSL "$REPO_RAW/install.sh?cb=$(date +%s)" -o "$UPDATE_TMP" || { echo "ERROR: download failed — does the router have internet access?"; exit 1; }
             # exec, don't run-and-return: the installer overwrites this very
             # script, and busybox sh reads scripts incrementally — a running
             # script must never keep executing while its file is rewritten.

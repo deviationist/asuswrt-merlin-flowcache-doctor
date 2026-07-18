@@ -57,9 +57,12 @@ grep -q "$CRU_ID" "$SS" || echo "cru a $CRU_ID \"* * * * * $DEST/roamctl watchdo
 # Fresh installs heal out of the box (audit-only available: roamctl flush off)
 [ "$FRESH" = "1" ] && touch "$DEST/roam-detect.flush"
 
-# Arm now
+# Arm now. restart, not start: on update the daemons are already running
+# the OLD code — start would no-op and leave stale processes; restart makes
+# the just-installed scripts take effect. (On fresh installs restart is
+# equivalent to start.)
 cru a "$CRU_ID" "* * * * * $DEST/roamctl watchdog"
-"$DEST/roamctl" start
+"$DEST/roamctl" restart
 sleep 2
 "$DEST/roamctl" health
 

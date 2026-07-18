@@ -26,7 +26,7 @@ if [ "$1" = "uninstall" ]; then
   [ -x "$DEST/roamctl" ] && "$DEST/roamctl" stop 2>/dev/null
   cru d "$CRU_ID" 2>/dev/null
   [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"
-  rm -f "$DEST/roam-detect.sh" "$DEST/roam-events.sh" "$DEST/roamctl" "$DEST/roam-detect.policy" "$DEST/roam-detect.flush" "$DEST/roam-detect.conf" /tmp/roam-detect.disabled
+  rm -f "$DEST/roam-detect.sh" "$DEST/roam-events.sh" "$DEST/roamctl" "$DEST/roam-detect.policy" "$DEST/roam-detect.flush" "$DEST/roam-detect.conf" /tmp/roam-detect.disabled /tmp/roam-detect.update.sh
   rm -rf /tmp/roam-detect
   echo "flowcache-doctor uninstalled."
   exit 0
@@ -74,8 +74,9 @@ ls /sys/class/net/br0/brif/).
 
 Useful commands:
   /jffs/scripts/roamctl log         # what it has detected and healed
-  /jffs/scripts/roamctl status      # running? healing? listener?
+  /jffs/scripts/roamctl status      # running? healing? listener? version?
   /jffs/scripts/roamctl flush off   # audit-only mode (log, don't heal)
   /jffs/scripts/roamctl policy off  # disable persistently
+  /jffs/scripts/roamctl update      # self-update to the latest version
   sh install.sh uninstall           # remove everything
 EOF

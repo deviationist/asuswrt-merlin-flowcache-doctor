@@ -29,7 +29,7 @@ rm -f /tmp/roam-events.pid
 
 cru d "$CRU_ID" 2>/dev/null
 [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"
-rm -f "$DEST/roam-detect.sh" "$DEST/roam-events.sh" "$DEST/roamctl" "$DEST/roam-detect.policy" "$DEST/roam-detect.flush" "$DEST/roam-detect.conf" /tmp/roam-detect.disabled
+rm -f "$DEST/roam-detect.sh" "$DEST/roam-events.sh" "$DEST/roamctl" "$DEST/roam-detect.policy" "$DEST/roam-detect.flush" "$DEST/roam-detect.conf" /tmp/roam-detect.disabled /tmp/roam-detect.update.sh
 rm -rf /tmp/roam-detect
 
 logger -t roam-detect "uninstalled" 2>/dev/null

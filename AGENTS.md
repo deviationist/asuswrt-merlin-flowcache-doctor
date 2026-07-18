@@ -31,6 +31,12 @@ editing anything.
   listener with it) silently dies. Only `service restart_wireless` (or a
   reboot) restores it. This cost us a day of "wlceventd doesn't log"
   confusion; the events were in `/jffs/wifi_wlc.log` all along.
+- **A running script must never have its file overwritten** — busybox `sh`
+  reads scripts incrementally, so rewriting an executing file is undefined
+  behavior. This is why `roamctl update` downloads the installer to `/tmp`
+  and `exec`s it (replacing the roamctl process before `/jffs/scripts/roamctl`
+  is replaced on disk). Any future self-modifying path must follow the same
+  download-then-exec pattern.
 - **`heal()` is duplicated** in `roam-detect.sh` and `roam-events.sh`
   (deliberate: zero risk to the validated poller). If you change one, change
   both — they must agree on state files, gates, and semantics.
@@ -71,6 +77,10 @@ editing anything.
   you add. New persistent files belong in `/jffs/scripts/roam-detect.*`.
 - **User tunables live in `/jffs/scripts/roam-detect.conf`** (sourced over
   defaults). The installer must never write or overwrite it.
+- **Release checklist**: bump `VERSION` in `scripts/roamctl` (shown by
+  `roamctl status` and used by `roamctl update`'s banner) in the release
+  commit, then tag `vX.Y.Z` + GitHub Release. Docs-only/comment-only
+  changes get no release — users install from `main` via curl.
 
 ## Testing
 
@@ -96,7 +106,7 @@ rate-limit gate — see *Never-drop deferral* above). `scripts/roam-events.sh` i
 default event log) and heals within ~1 s of a successful (Re)Assoc, sharing
 the same `/tmp/roam-detect/` cooldown state so the sources never
 double-flush. `scripts/roamctl` is the lifecycle wrapper (start/stop/
-restart/status/log/policy/flush/boot/watchdog/uninstall) managing both
+restart/status/log/policy/flush/boot/watchdog/update/uninstall) managing both
 daemons — boot via Merlin's `services-start`, crash recovery via a `cru`
 cron watchdog every 60 s, both honoring the persistent policy file and the
 runtime stop flag. `install.sh`/`uninstall.sh`

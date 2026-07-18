@@ -3,9 +3,12 @@
 # Provides systemd-like lifecycle on Asuswrt-Merlin: boot start, crash
 # watchdog (via cru/cron), manual stop that disarms the watchdog, and a
 # persistent on/off policy.
+VERSION=0.2.4
 DAEMON=/jffs/scripts/roam-detect.sh
-EVDAEMON=/jffs/scripts/roam-events.sh    # opt-in wlceventd event listener
+EVDAEMON=/jffs/scripts/roam-events.sh    # wlceventd event listener (default-on when the event log exists)
 CONF=/jffs/scripts/roam-detect.conf
+REPO_RAW="https://raw.githubusercontent.com/deviationist/asuswrt-merlin-flowcache-doctor/main"
+UPDATE_TMP=/tmp/roam-detect.update.sh    # transient installer copy for 'update' (RAM)
 TAG=roam-detect
 FLAG=/tmp/roam-detect.disabled           # runtime manual-stop flag (cleared by start/reboot)
 POLICY=/jffs/scripts/roam-detect.policy  # persistent policy: "on" (default if absent) or "off"
@@ -44,7 +47,8 @@ case "$1" in
             logger -t "$TAG" "stopped manually (watchdog disarmed until 'roamctl start' or reboot)" ;;
   restart)  for p in $(pids); do kill "$p"; done; stop_ev; sleep 1; rm -f "$FLAG"; "$DAEMON" >/dev/null 2>&1 &
             start_ev ;;
-  status)   echo "policy: $(policy)"; echo "autoflush: $([ -f "$FLUSHFLAG" ] && echo on || echo off)"
+  status)   echo "version: $VERSION"
+            echo "policy: $(policy)"; echo "autoflush: $([ -f "$FLUSHFLAG" ] && echo on || echo off)"
             p=$(pids)
             if [ -n "$p" ]; then echo "running (pid $p)"; else echo "not running$([ -f $FLAG ] && echo ' (manually stopped)')"; fi
             if events_enabled; then
@@ -72,14 +76,24 @@ case "$1" in
             if events_enabled && [ -z "$(epids)" ]; then
               logger -t "$TAG" "watchdog: event listener not running, restarting"; "$EVDAEMON" >/dev/null 2>&1 &
             fi ;;
+  update)   echo "flowcache-doctor $VERSION — fetching the latest installer from GitHub (main)..."
+            curl -fsSL "$REPO_RAW/install.sh" -o "$UPDATE_TMP" || { echo "ERROR: download failed — does the router have internet access?"; exit 1; }
+            # exec, don't run-and-return: the installer overwrites this very
+            # script, and busybox sh reads scripts incrementally — a running
+            # script must never keep executing while its file is rewritten.
+            # exec replaces this process with the installer (running from RAM),
+            # after which /jffs/scripts/roamctl is free to be replaced. The
+            # installer preserves the conf and the flush/policy choices, and
+            # restarts both daemons.
+            exec sh "$UPDATE_TMP" ;;
   uninstall) for p in $(pids); do kill "$p"; done; stop_ev
             cru d roam-detect-wd 2>/dev/null
             SS=/jffs/scripts/services-start
             [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"
-            rm -f "$DAEMON" "$EVDAEMON" "$POLICY" "$FLAG" "$FLUSHFLAG" "$CONF" /tmp/roam-events.pid
+            rm -f "$DAEMON" "$EVDAEMON" "$POLICY" "$FLAG" "$FLUSHFLAG" "$CONF" /tmp/roam-events.pid "$UPDATE_TMP"
             rm -rf /tmp/roam-detect
             logger -t "$TAG" "uninstalled"
             echo "flowcache-doctor uninstalled."
             rm -f "$0" ;;
-  *)        echo "usage: roamctl start|stop|restart|status|log|watchdog|boot|policy [on|off]|flush [on|off]|uninstall" ;;
+  *)        echo "usage: roamctl start|stop|restart|status|log|watchdog|boot|policy [on|off]|flush [on|off]|update|uninstall" ;;
 esac

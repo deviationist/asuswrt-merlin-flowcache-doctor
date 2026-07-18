@@ -309,6 +309,24 @@ The installer verifies JFFS scripts are enabled, fetches the two scripts into
 into `services-start` + cron (idempotently — safe to re-run), and starts the
 daemon.
 
+## Update
+
+One command, on the router:
+
+```sh
+/jffs/scripts/roamctl update
+```
+
+It fetches the latest installer from this repo and hands off to it —
+which replaces the three scripts, restarts both daemons, and shows the
+new status. **Your settings survive**: the conf file
+(`roam-detect.conf`), the auto-flush on/off choice, and the persistent
+policy are all preserved (the installer only creates the flush flag on
+*fresh* installs). Equivalently, re-running the install command from
+*Install* above does exactly the same thing — `roamctl update` just
+saves you looking it up. `roamctl status` shows the version you're
+running.
+
 ## Uninstall
 
 Just as clean, three equivalent ways:
@@ -401,6 +419,7 @@ by any of the uninstall paths:
 | `/jffs/scripts/roam-events.sh` | wlceventd event listener (default-on when available; `EVENT_HEAL=0` disables) |
 | `/tmp/roam-detect/` | per-client state (RAM), shared by both heal sources |
 | `/tmp/roam-events.pid` | event listener pidfile (RAM) |
+| `/tmp/roam-detect.update.sh` | transient installer copy left by `roamctl update` (RAM, gone on reboot) |
 | syslog tag `roam-detect` | all output (RAM-backed log) |
 
 ## Usage
@@ -413,6 +432,7 @@ roamctl stop            # stop + disarm watchdog (until start or reboot)
 roamctl start           # start + re-arm watchdog
 roamctl restart         # bounce the daemon
 roamctl policy off|on   # persistent master switch (survives reboots)
+roamctl update          # self-update to the latest version from GitHub
 roamctl uninstall       # remove everything, offline
 ```
 

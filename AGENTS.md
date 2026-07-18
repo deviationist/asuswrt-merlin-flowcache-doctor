@@ -85,6 +85,12 @@ editing anything.
   `roamctl status` and used by `roamctl update`'s banner) in the release
   commit, then tag `vX.Y.Z` + GitHub Release. Docs-only/comment-only
   changes get no release — users install from `main` via curl.
+- **raw.githubusercontent.com lags pushes by up to ~5 minutes** even with
+  the `?cb=` cache-bust (cb defeats the CDN edge, not raw's internal
+  layer; verified 2026-07-18 against the API, which was already fresh).
+  Consequence: don't field-test `roamctl update` within ~5 min of a push
+  and conclude the push is broken — grep the fetched
+  `/tmp/roam-detect.update.sh` to see what was actually served.
 
 ## Testing
 

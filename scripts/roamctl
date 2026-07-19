@@ -3,7 +3,7 @@
 # Provides systemd-like lifecycle on Asuswrt-Merlin: boot start, crash
 # watchdog (via cru/cron), manual stop that disarms the watchdog, and a
 # persistent on/off policy.
-VERSION=0.2.4
+VERSION=0.2.5
 DAEMON=/jffs/scripts/roam-detect.sh
 EVDAEMON=/jffs/scripts/roam-events.sh    # wlceventd event listener (default-on when the event log exists)
 CONF=/jffs/scripts/roam-detect.conf
@@ -20,11 +20,19 @@ FLUSHFLAG=/jffs/scripts/roam-detect.flush # exists => auto-flush enabled (persis
 # with the daemon's distinctive "{roam-detect.sh}" ps form as orphan fallback.
 PIDFILE=/tmp/roam-detect.pid
 pids() {
-  if [ -f "$PIDFILE" ]; then
-    p=$(cat "$PIDFILE")
-    grep -q "roam-detect.sh" "/proc/$p/cmdline" 2>/dev/null && { echo "$p"; return; }
-  fi
-  ps w | grep "{[r]oam-detect.sh}" | awk '{print $1}'
+  # UNION of pidfile + ps matches, same rationale as epids() below: an
+  # early return on a valid pidfile pid hides any second poller (e.g. one
+  # double-started by the watchdog racing a restart's kill/start gap) from
+  # stop/restart — it would survive as an orphan running old code. The ps
+  # fallback can also transiently match a pass's command-substitution
+  # children; killing those alongside the parent is harmless.
+  {
+    if [ -f "$PIDFILE" ]; then
+      p=$(cat "$PIDFILE")
+      grep -q "roam-detect.sh" "/proc/$p/cmdline" 2>/dev/null && echo "$p"
+    fi
+    ps w | grep "{[r]oam-detect.sh}" | awk '{print $1}'
+  } | sort -u
 }
 epids() {
   # UNION of pidfile + ps matches (not either-or): pre-v0.2.4 listeners ran

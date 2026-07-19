@@ -67,10 +67,10 @@ case "$1" in
             start_ev ;;
   status)   echo "version: $VERSION"
             echo "policy: $(policy)"; echo "autoflush: $([ -f "$FLUSHFLAG" ] && echo on || echo off)"
-            p=$(pids)
+            p=$(echo $(pids))     # word-split to one line (union can be multi-pid)
             if [ -n "$p" ]; then echo "running (pid $p)"; else echo "not running$([ -f $FLAG ] && echo ' (manually stopped)')"; fi
             if events_enabled; then
-              ep=$(epids)
+              ep=$(echo $(epids))
               if [ -n "$ep" ]; then echo "event listener: running (pid $ep)"; else echo "event listener: enabled but NOT running"; fi
             else
               echo "event listener: off (EVENT_HEAL=1 in roam-detect.conf to enable)"
@@ -125,10 +125,10 @@ case "$1" in
             # --- runtime ---
             [ "$(policy)" = "on" ] && ok "policy on" || note "policy off — daemons disabled persistently (roamctl policy on)"
             [ -f "$FLUSHFLAG" ] && ok "auto-flush on" || note "auto-flush off — audit-only mode (roamctl flush on)"
-            p=$(pids)
+            p=$(echo $(pids))
             [ -n "$p" ] && ok "poller running (pid $p)" || bad "poller NOT running"
             if events_enabled; then
-              ep=$(epids)
+              ep=$(echo $(epids))
               [ -n "$ep" ] && ok "event listener running (pid $ep)" || bad "event listener enabled but NOT running"
             elif [ "$EVENT_HEAL" = "0" ]; then note "event listener disabled by conf (EVENT_HEAL=0)"
             elif [ ! -f /jffs/wifi_wlc.log ]; then note "event listener standing down: no /jffs/wifi_wlc.log on this firmware (poller covers healing)"

@@ -155,8 +155,14 @@ is a user-facing diagnosis skill, not contributor docs.
   assoclist (flushing a departed client is harmless; rate limits still
   apply). Publicly promised as "in the works" in the addon forum thread.
   Related: clients associated to a node are entirely outside detection
-  (README → Limitations), and whether the doctor runs on a Merlin-flashed
-  node is untested.
+  (README → Limitations). Field data 2026-07-18 (3×RT-BE92U, all-Merlin):
+  the doctor installs and runs on Merlin AiMesh nodes, but node bridge
+  members are named differently (`wl0.1.0 wl0.2 wl0.5 wl1.1.0 wl1.2
+  wl2.1.0 wl2.2` vs the router's `wl0.0 wl0.1 wl0.4 wl1.0 wl1.1 wl2.0
+  wl2.1`) — default BSSLIST matches nothing on a node. Candidate v0.3.0
+  work: BSSLIST auto-detection (enumerate br0 `wl*` members, exclude the
+  `wlX.0` primaries that carry AiMesh backhaul), which would make node
+  installs work out of the box.
 - **MLO (Wi-Fi 7 Multi-Link Operation) is uncharacterized**: the doctor's
   model assumes a client is associated to exactly one BSS at a time; an
   STA MLD is legitimately on multiple radios under one association, band

@@ -547,9 +547,16 @@ the top first. Then consider posting your capture in the
   perspective they sit behind the backhaul port, and the node's radios
   never appear in `BSSLIST` (they're the node's, not the router's). Roams
   node→node or router→node are therefore not healed (a heal-on-departure
-  trigger to cover the router→node case is planned). Whether the doctor
-  can usefully run *on* a Merlin-flashed node is untested — reports
-  welcome.
+  trigger to cover the router→node case is planned). The doctor *installs*
+  fine on a Merlin-flashed node (first field report: 3×RT-BE92U mesh,
+  2026-07-18), but **node BSS interface names differ structurally** from
+  the router's — e.g. `wl0.1.0 wl1.1.0 wl2.1.0` instead of
+  `wl0.1 wl1.1 wl2.1` — so the default `BSSLIST` matches nothing there and
+  the doctor is blind until you set it. `roamctl health` flags exactly
+  this and prints the candidates; identify which carry your SSID with:
+  `for b in $(ls /sys/class/net/br0/brif | grep ^wl); do echo "$b: $(wl -i $b ssid)"; done`
+  Node-side *efficacy* (does it heal node-local staleness?) is still
+  unconfirmed — reports welcome.
 - **MLO (Wi-Fi 7 Multi-Link Operation) is uncharacterized.** The doctor's
   truth source assumes a client is associated to exactly one radio at a
   time; an MLO client is legitimately on several at once, and band

@@ -75,7 +75,7 @@ case "$1" in
             else
               echo "event listener: off (EVENT_HEAL=1 in roam-detect.conf to enable)"
             fi ;;
-  log)      grep "$TAG" /tmp/syslog.log | tail -30 ;;
+  log)      grep -E "roam-(detect|events)" /tmp/syslog.log | tail -30 ;;   # both daemons' tags — the listener's direct heals log as roam-events
   policy)   case "$2" in
               on|off) echo "$2" > "$POLICY"; logger -t "$TAG" "restart policy set to $2"; echo "policy: $2" ;;
               *) echo "policy: $(policy)" ;;

@@ -15,14 +15,32 @@
 # restores the event feed.
 
 EVLOG=/jffs/wifi_wlc.log
-BSSLIST="wl0.1 wl1.1 wl2.1"
+BSSLIST="auto"  # "auto" = resolve via roam-lib.sh; or an explicit list
 COOLDOWN=60
 MIN_GAP=8
+HEAL_TRIGGERS="roam stale-fdb dual-settle departure"   # keep default in sync with roam-detect.sh
 TAG=roam-events
 STATE=/tmp/roam-detect
 FLUSHFLAG=/jffs/scripts/roam-detect.flush
 CONF=/jffs/scripts/roam-detect.conf
+LIB=/jffs/scripts/roam-lib.sh
 [ -f "$CONF" ] && . "$CONF"
+
+# BSSLIST=auto: resolve for our own use (deauth-branch radio lookups). The
+# poller owns the fingerprint file — we only resolve, never write it.
+if [ "$BSSLIST" = "auto" ]; then
+  if [ -f "$LIB" ]; then
+    . "$LIB"
+    BSSLIST=$(effective_bsslist auto)
+  else
+    BSSLIST="wl0.1 wl1.1 wl2.1"
+    logger -t "$TAG" "BSSLIST=auto but $LIB is missing — using static default ($BSSLIST)"
+  fi
+fi
+
+# Is a heal trigger class enabled? (duplicated from roam-detect.sh — keep
+# the two in sync, same rule as heal(); see AGENTS.md)
+want() { case " $HEAL_TRIGGERS " in *" $1 "*) return 0;; *) return 1;; esac; }
 
 if [ ! -f "$EVLOG" ]; then
   logger -t "$TAG" "event source $EVLOG not present on this firmware — standing down (the polling daemon covers healing)"
@@ -104,6 +122,15 @@ while read -r line; do
         done
         if [ -n "$curbss" ]; then
           heal "$mac" "stale-radio deauth on $evbss (client on $curbss)" "$curbss" force
+        elif want departure; then
+          # Client on NO local radio: it left this unit entirely — a mesh
+          # roam to another AiMesh unit, or a plain disconnect. The departed
+          # unit's radio-pinned flow entries have no other trigger (the
+          # router->node roam gap); flushing a departed client is harmless
+          # if it was just a disconnect. force bypasses the same-radio
+          # cooldown (the preceding assoc-flush may be fresh); MIN_GAP
+          # still floors the rate.
+          heal "$mac" "departure from $evbss" "$evbss" force
         fi
       fi
       ;;

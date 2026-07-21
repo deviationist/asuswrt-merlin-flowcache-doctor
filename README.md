@@ -249,6 +249,11 @@ restarted from a shell it goes silent, and only `service restart_wireless`
 anti-storm floor leave a *pending marker* that the poller retries seconds
 later (covers rapid multi-hop reconnects like off → 2.4 GHz → 6 GHz, and
 the stale-radio deauth heal arriving seconds after an assoc flush).
+Since **v0.3.0** the listener also heals on **departure**: a client that
+deauths without reappearing on any local radio has either mesh-roamed to
+another AiMesh unit — leaving this unit's radio-pinned flow entries stale
+with no other trigger — or simply disconnected, in which case the flush
+is harmless. Rate-limited like every other trigger.
 
 ## Claude Code skill
 
@@ -369,11 +374,15 @@ merges), so the log is more trustworthy than the release notes.
 Until confirmed fixed, the tool is cheap insurance: one idle shell loop, logs
 only on real events, and uninstalls in one command.
 
-If your SSIDs don't live on `wl0.1`/`wl1.1`/`wl2.1` (varies by model and
-config — list bridge members with `ls /sys/class/net/br0/brif/`), set
-`BSSLIST` in `/jffs/scripts/roam-detect.conf` (see *Tuning* below). One
-line there covers both daemons — don't edit the scripts themselves; those
-edits are lost on update.
+Watched interfaces are **auto-detected** since v0.3.0 (`BSSLIST=auto`,
+the default): the doctor enumerates the bridge, asks each interface its
+SSID, and watches every SSID that spans two or more radios — on routers
+*and* AiMesh nodes, whose interface names differ structurally. Changes to
+your Wi-Fi networks are picked up automatically within ~2 minutes.
+`roamctl health` shows what was resolved. To pin an explicit list, set
+`BSSLIST="..."` in `/jffs/scripts/roam-detect.conf` (see *Tuning* below)
+— one line there covers both daemons; don't edit the scripts themselves
+(those edits are lost on update).
 
 ### Manual install (for the tech-savvy — no scripts, full control)
 
@@ -381,18 +390,17 @@ Everything the installer does, by hand, so you know exactly what lands on
 your router:
 
 ```sh
-# 1. Copy the two scripts (from a clone of this repo)
-scp scripts/roam-detect.sh scripts/roamctl <user>@<router>:/jffs/scripts/
+# 1. Copy the four scripts (from a clone of this repo)
+scp scripts/roam-detect.sh scripts/roam-events.sh scripts/roam-lib.sh scripts/roamctl <user>@<router>:/jffs/scripts/
 
 ssh <user>@<router>
 
 # 2. Permissions (they run as root via cron/boot — keep them non-world-writable)
 chmod 755 /jffs/scripts/roam-detect.sh /jffs/scripts/roamctl
 
-# 3. Adapt to your radios if needed: BSSLIST at the top of roam-detect.sh
-#    must name the bridge-member BSS interfaces your SSIDs use.
-ls /sys/class/net/br0/brif/    # candidates
-vi /jffs/scripts/roam-detect.sh
+# 3. Interfaces are auto-detected (BSSLIST=auto). To pin an explicit list
+#    instead, create /jffs/scripts/roam-detect.conf with BSSLIST="..."
+#    (candidates: ls /sys/class/net/br0/brif/)
 
 # 4. Boot persistence: Merlin runs /jffs/scripts/services-start at every boot.
 #    Two lines: start the daemon (honoring the on/off policy), and register
@@ -424,6 +432,7 @@ by any of the uninstall paths:
 | two lines in `/jffs/scripts/services-start` | boot start + watchdog registration |
 | cron entry `roam-detect-wd` | watchdog, every 60 s (RAM, re-added at boot) |
 | `/jffs/scripts/roam-events.sh` | wlceventd event listener (default-on when available; `EVENT_HEAL=0` disables) |
+| `/jffs/scripts/roam-lib.sh` | shared helpers (the `BSSLIST=auto` resolver), sourced by both daemons + `roamctl` |
 | `/tmp/roam-detect/` | per-client state (RAM), shared by both heal sources |
 | `/tmp/roam-events.pid` | event listener pidfile (RAM) |
 | `/tmp/roam-detect.update.sh` | transient installer copy left by `roamctl update` (RAM, gone on reboot) |
@@ -460,14 +469,30 @@ installer never touches it), and all uninstall paths remove it:
 
 ```sh
 # /jffs/scripts/roam-detect.conf — all optional
-BSSLIST="wl0.1 wl1.1 wl2.1"  # your SSID-carrying BSS interfaces (varies by model!)
+BSSLIST="auto"               # auto-detect SSID-carrying interfaces (default);
+                             #   or pin an explicit list: "wl0.1 wl1.1 wl2.1"
 INTERVAL=2                   # seconds between detection passes
 COOLDOWN=60                  # min seconds between flushes per client (same radio)
 MIN_GAP=8                    # hard floor between flushes per client (any radio)
-HEAL_TRIGGERS="roam stale-fdb dual-settle"   # which triggers may flush
+HEAL_TRIGGERS="roam stale-fdb dual-settle departure"   # which triggers may flush
 LOG_EVENTS=1                 # 0 = quiet mode: log only actions (FLUSHED) + lifecycle
 EVENT_HEAL=1                 # 0 = disable the wlceventd event listener (poller only)
 ```
+
+`BSSLIST="auto"` (the default since v0.3.0) resolves the watched
+interfaces at daemon start: enumerate `br0` members, ask each its SSID
+(AiMesh-internal interfaces exclude themselves — primaries and node
+backhaul VAPs refuse the query, onboarding/backhaul SSIDs are filtered),
+keep every SSID spanning ≥2 interfaces (single-band networks can't
+band-roam). The cron watchdog re-resolves every 60 s and — after a
+two-reading debounce that rides out `restart_wireless` flapping —
+restarts the daemons when your network layout actually changed, so
+adding or removing a Wi-Fi network is picked up within ~2 minutes with
+no manual step. VLANed guest networks live outside `br0` and are
+deliberately out of scope (they're also the least-exposed case:
+single-band and AP-isolated). Field-validated on an RT-BE92U router and
+AiMesh nodes, whose interface names differ structurally — that's the
+problem auto mode exists to solve.
 
 `LOG_EVENTS=0` silences the observation lines (`ROAM`/`DUAL`/`SETTLED`/
 `STALE-FDB`/`RECOVERED`) for noise-sensitive setups; actions (`FLUSHED`,
@@ -482,7 +507,9 @@ itself always runs and logs everything): `roam` = preventive flush on every
 net radio change; `stale-fdb` = corrective flush when the forwarding table
 provably contradicts the association (retried until recovered);
 `dual-settle` = flush when a client exits multi-radio churn even without a
-net radio change. Default: all three. A conservative setup that only ever
+net radio change; `departure` = flush when a client deauths without
+reappearing on any local radio (a mesh roam to another AiMesh unit — or a
+plain disconnect, where the flush is harmless). Default: all four. A conservative setup that only ever
 flushes on *proven* corruption would be `HEAL_TRIGGERS="stale-fdb"` — at the
 cost of eating the blackhole classes the preventive triggers exist for.
 
@@ -540,23 +567,18 @@ the top first. Then consider posting your capture in the
   outage while ~2 minutes of quiet lets it starve. Monitoring pings count
   as traffic (we proved this on ourselves — twice).
 - BSS interface names vary by model/config — set `BSSLIST` accordingly.
-- **AiMesh: only the router's own radios are watched.** The doctor runs on
-  the router and detects/heals roams between the router's radios (plus
-  roams *onto* them from elsewhere, via the assoc event). Clients
-  associated to an AiMesh *node* are invisible to it — from the router's
-  perspective they sit behind the backhaul port, and the node's radios
-  never appear in `BSSLIST` (they're the node's, not the router's). Roams
-  node→node or router→node are therefore not healed (a heal-on-departure
-  trigger to cover the router→node case is planned). The doctor *installs*
-  fine on a Merlin-flashed node (first field report: 3×RT-BE92U mesh,
-  2026-07-18), but **node BSS interface names differ structurally** from
-  the router's — e.g. `wl0.1.0 wl1.1.0 wl2.1.0` instead of
-  `wl0.1 wl1.1 wl2.1` — so the default `BSSLIST` matches nothing there and
-  the doctor is blind until you set it. `roamctl health` flags exactly
-  this and prints the candidates; identify which carry your SSID with:
-  `for b in $(ls /sys/class/net/br0/brif | grep ^wl); do echo "$b: $(wl -i $b ssid)"; done`
-  Node-side *efficacy* (does it heal node-local staleness?) is still
-  unconfirmed — reports welcome.
+- **AiMesh: each doctor watches the radios of the unit it runs on.** For
+  full mesh coverage, install it on **every Merlin-flashed unit** —
+  `BSSLIST=auto` (v0.3.0) handles the structurally different node
+  interface names (e.g. `wl1.2 wl2.2` where the router uses
+  `wl1.1 wl2.1`, with backhaul VAPs like `wlX.1.0` excluding themselves),
+  and the `departure` heal trigger (also v0.3.0) covers roams *away* from
+  a unit — the router→node case where the departed unit's stale entries
+  previously had no trigger at all. A doctor on the router alone still
+  heals everything involving the router's own radios; it just can't see
+  or flush another unit's forwarding state. Node-side *efficacy* (does a
+  node-local doctor demonstrably heal node-local staleness?) is still
+  awaiting a confirmed field incident — reports welcome.
 - **MLO (Wi-Fi 7 Multi-Link Operation) is uncharacterized.** The doctor's
   truth source assumes a client is associated to exactly one radio at a
   time; an MLO client is legitimately on several at once, and band

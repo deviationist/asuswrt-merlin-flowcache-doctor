@@ -53,9 +53,16 @@ editing anything.
   and `exec`s it (replacing the roamctl process before `/jffs/scripts/roamctl`
   is replaced on disk). Any future self-modifying path must follow the same
   download-then-exec pattern.
-- **`heal()` is duplicated** in `roam-detect.sh` and `roam-events.sh`
-  (deliberate: zero risk to the validated poller). If you change one, change
-  both — they must agree on state files, gates, and semantics.
+- **`heal()` and `want()` are duplicated** in `roam-detect.sh` and
+  `roam-events.sh` (deliberate: zero risk to the validated poller). If you
+  change one, change both — they must agree on state files, gates, and
+  semantics (including the `HEAL_TRIGGERS` default string).
+- **The `BSSLIST=auto` resolver lives ONLY in `roam-lib.sh`** — never copy
+  `resolve_bsslist()`/`effective_bsslist()` into the daemons or roamctl;
+  all four consumers source the lib. The fingerprint
+  (`/tmp/roam-detect/bsslist`) is written by the **poller only** (atomic
+  temp+`mv`); the listener resolves for its own use, the watchdog only
+  compares, health only reports.
 - **No development-setup specifics in shipped code** — no real IPs, client
   MACs, hostnames, or SSIDs from anyone's network, not even in comments
   (use `AA:BB:CC:DD:EE:FF` / `192.168.1.x` style placeholders).
@@ -110,7 +117,7 @@ editing anything.
 - There is no CI and no router emulator: real validation happens on an
   actual Asuswrt-Merlin router over SSH. Deploy pattern that avoids both
   connection bursts and the self-kill trap:
-  `tar cf - -C scripts roam-detect.sh roam-events.sh roamctl | ssh <router> 'tar xf - -C /jffs/scripts && chmod 755 /jffs/scripts/roam* && /jffs/scripts/roamctl restart'`
+  `tar cf - -C scripts roam-detect.sh roam-events.sh roam-lib.sh roamctl | ssh <router> 'tar xf - -C /jffs/scripts && chmod 755 /jffs/scripts/roam* && /jffs/scripts/roamctl restart'`
 - After deploying: `roamctl health` (full artifact + runtime check, exits
   non-zero on any FAIL — the installer and `roamctl update` run it
   automatically at the end), then `roamctl log` for the
@@ -147,22 +154,19 @@ is a user-facing diagnosis skill, not contributor docs.
   observed. Everything observable is covered: net roams + dual-settle
   (poller), assoc events (event listener), FDB mismatch (backstop),
   gate-suppressed flushes (deferred pending retry).
-- **AiMesh departure gap** (surfaced by a 3×BE92U field report, 2026-07-18):
-  a roam *away* from this unit (client vanishes to an AiMesh node, never
-  reappearing on a local radio) leaves the departed unit's stale flow
-  entries unhealed — no trigger fires. Candidate fix: heal on
-  deauth/disassoc even when the client doesn't reappear in any local
-  assoclist (flushing a departed client is harmless; rate limits still
-  apply). Publicly promised as "in the works" in the addon forum thread.
-  Related: clients associated to a node are entirely outside detection
-  (README → Limitations). Field data 2026-07-18 (3×RT-BE92U, all-Merlin):
-  the doctor installs and runs on Merlin AiMesh nodes, but node bridge
-  members are named differently (`wl0.1.0 wl0.2 wl0.5 wl1.1.0 wl1.2
-  wl2.1.0 wl2.2` vs the router's `wl0.0 wl0.1 wl0.4 wl1.0 wl1.1 wl2.0
-  wl2.1`) — default BSSLIST matches nothing on a node. Candidate v0.3.0
-  work: BSSLIST auto-detection (enumerate br0 `wl*` members, exclude the
-  `wlX.0` primaries that carry AiMesh backhaul), which would make node
-  installs work out of the box.
+- SOLVED v0.3.0 (context): the **AiMesh departure gap** (roams away from a
+  unit left its stale entries unhealed) is closed by the `departure` heal
+  trigger, and **`BSSLIST=auto`** (resolver in `roam-lib.sh`, watchdog
+  drift-restart with two-reading debounce) makes node installs work
+  despite structurally different node interface names. Design history and
+  field validation live in GitHub issue #2. Still open from that arc:
+  **singleton SSIDs in a mesh** — a single-band network can't band-roam
+  but its clients mesh-roam between units; whether that mints the same
+  stale-entry class is unproven (the ≥2-interface rule excludes singletons
+  from auto). A field experiment is standing in the addon thread (which
+  unit's `fcctl flush` cures an incident); if confirmed, consider
+  including singletons when a mesh is detected (radio primaries carrying a
+  32-hex SSID ⇒ AiMesh present).
 - **MLO (Wi-Fi 7 Multi-Link Operation) is uncharacterized**: the doctor's
   model assumes a client is associated to exactly one BSS at a time; an
   STA MLD is legitimately on multiple radios under one association, band

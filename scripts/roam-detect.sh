@@ -13,18 +13,33 @@
 # and reinstalls; the installer never touches it). BSSLIST must name the
 # bridge-member BSS interfaces your SSIDs actually use
 # (check: ls /sys/class/net/br0/brif/).
-BSSLIST="wl0.1 wl1.1 wl2.1"
+BSSLIST="auto"  # "auto" = resolve SSID-carrying BSS interfaces live (roam-lib.sh); or an explicit list like "wl0.1 wl1.1 wl2.1"
 INTERVAL=2      # seconds between detection passes
 COOLDOWN=60     # min seconds between flushes per client (same radio)
 MIN_GAP=8       # hard floor between flushes per client (any radio)
-HEAL_TRIGGERS="roam stale-fdb dual-settle"   # which triggers may flush (detection always logs all)
+HEAL_TRIGGERS="roam stale-fdb dual-settle departure"   # which triggers may flush (detection always logs all)
 LOG_EVENTS=1    # 1 = log observations (ROAM/DUAL/SETTLED/STALE/RECOVERED); 0 = log only actions (FLUSHED) + lifecycle
 EVENT_HEAL=1    # 1 = run the wlceventd event listener too when the firmware provides its log; 0 = poller only
 TAG=roam-detect
 STATE=/tmp/roam-detect
 FLUSHFLAG=/jffs/scripts/roam-detect.flush    # exists => auto-flush on (roamctl flush on|off)
 CONF=/jffs/scripts/roam-detect.conf
+LIB=/jffs/scripts/roam-lib.sh
 [ -f "$CONF" ] && . "$CONF"
+
+# BSSLIST=auto: resolve the SSID-carrying interfaces now and record the
+# result as the fingerprint the watchdog's drift check compares against.
+# The poller owns the fingerprint (the listener resolves but never writes).
+if [ "$BSSLIST" = "auto" ]; then
+  if [ -f "$LIB" ]; then
+    . "$LIB"
+    BSSLIST=$(effective_bsslist auto)
+    write_bsslist_fingerprint "$BSSLIST"
+  else
+    BSSLIST="wl0.1 wl1.1 wl2.1"
+    logger -t "$TAG" "BSSLIST=auto but $LIB is missing — using static default ($BSSLIST)"
+  fi
+fi
 
 mkdir -p "$STATE"
 echo $$ > /tmp/roam-detect.pid

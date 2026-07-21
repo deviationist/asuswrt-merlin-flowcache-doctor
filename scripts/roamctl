@@ -3,7 +3,7 @@
 # Provides systemd-like lifecycle on Asuswrt-Merlin: boot start, crash
 # watchdog (via cru/cron), manual stop that disarms the watchdog, and a
 # persistent on/off policy.
-VERSION=0.2.5
+VERSION=0.3.0
 DAEMON=/jffs/scripts/roam-detect.sh
 EVDAEMON=/jffs/scripts/roam-events.sh    # wlceventd event listener (default-on when the event log exists)
 CONF=/jffs/scripts/roam-detect.conf
@@ -93,6 +93,30 @@ case "$1" in
             [ -n "$(pids)" ] || { logger -t "$TAG" "watchdog: daemon not running, restarting"; "$DAEMON" >/dev/null 2>&1 & }
             if events_enabled && [ -z "$(epids)" ]; then
               logger -t "$TAG" "watchdog: event listener not running, restarting"; "$EVDAEMON" >/dev/null 2>&1 &
+            fi
+            # BSSLIST=auto drift check: re-resolve and compare against the
+            # fingerprint the daemons started with. Debounce: act only when
+            # two consecutive watchdog readings agree with each other AND
+            # differ from the fingerprint — rides out interface flapping
+            # during restart_wireless (same pattern as STALE1->STALE2).
+            BSSLIST="auto"; [ -f "$CONF" ] && . "$CONF"
+            if [ "$BSSLIST" = "auto" ] && [ -f /jffs/scripts/roam-lib.sh ]; then
+              . /jffs/scripts/roam-lib.sh
+              cur=$(resolve_bsslist)
+              run=$(cat /tmp/roam-detect/bsslist 2>/dev/null)
+              DRIFT=/tmp/roam-detect/.bsslist.drift
+              if [ -n "$cur" ] && [ -n "$run" ] && [ "$cur" != "$run" ]; then
+                prev=$(cat "$DRIFT" 2>/dev/null)
+                if [ "$cur" = "$prev" ]; then
+                  logger -t "$TAG" "watchdog: BSSLIST drift confirmed ('$run' -> '$cur') — restarting daemons"
+                  rm -f "$DRIFT"
+                  "$0" restart
+                else
+                  echo "$cur" > "$DRIFT"
+                fi
+              else
+                rm -f "$DRIFT"
+              fi
             fi ;;
   health)   rc=0
             ok()   { echo "  ok:   $1"; }
@@ -101,7 +125,7 @@ case "$1" in
             echo "flowcache-doctor $VERSION health check"
             # --- install integrity ---
             [ "$(nvram get jffs2_scripts)" = "1" ] && ok "JFFS custom scripts enabled" || bad "JFFS custom scripts disabled (nvram jffs2_scripts)"
-            for f in "$DAEMON" "$EVDAEMON"; do
+            for f in "$DAEMON" "$EVDAEMON" /jffs/scripts/roam-lib.sh; do
               [ -x "$f" ] && ok "present+executable: $f" || bad "missing or not executable: $f"
             done
             SS=/jffs/scripts/services-start
@@ -114,7 +138,19 @@ case "$1" in
             if [ -f "$CONF" ]; then
               sh -n "$CONF" 2>/dev/null && ok "conf parses: $CONF" || bad "conf has syntax errors: $CONF"
             fi
-            BSSLIST="wl0.1 wl1.1 wl2.1"; [ -f "$CONF" ] && . "$CONF"
+            BSSLIST="auto"; [ -f "$CONF" ] && . "$CONF"
+            if [ "$BSSLIST" = "auto" ]; then
+              if [ -f /jffs/scripts/roam-lib.sh ]; then
+                . /jffs/scripts/roam-lib.sh
+                BSSLIST=$(effective_bsslist auto)
+                ok "BSSLIST=auto resolved: ${BSSLIST:-<nothing>}"
+                run=$(cat /tmp/roam-detect/bsslist 2>/dev/null)
+                [ -n "$run" ] && [ "$run" != "$BSSLIST" ] && note "BSSLIST drift pending: daemons run '$run' — the watchdog restarts them within ~2 min"
+              else
+                bad "BSSLIST=auto but /jffs/scripts/roam-lib.sh is missing"
+                BSSLIST="wl0.1 wl1.1 wl2.1"
+              fi
+            fi
             for b in $BSSLIST; do
               if [ -d "/sys/class/net/$b" ]; then
                 [ -d "/sys/class/net/br0/brif/$b" ] && ok "BSS $b exists, member of br0" || note "BSS $b exists but is NOT in br0 — check BSSLIST"
@@ -154,7 +190,7 @@ case "$1" in
             cru d roam-detect-wd 2>/dev/null
             SS=/jffs/scripts/services-start
             [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"
-            rm -f "$DAEMON" "$EVDAEMON" "$POLICY" "$FLAG" "$FLUSHFLAG" "$CONF" /tmp/roam-events.pid "$UPDATE_TMP"
+            rm -f "$DAEMON" "$EVDAEMON" /jffs/scripts/roam-lib.sh "$POLICY" "$FLAG" "$FLUSHFLAG" "$CONF" /tmp/roam-events.pid "$UPDATE_TMP"
             rm -rf /tmp/roam-detect
             logger -t "$TAG" "uninstalled"
             echo "flowcache-doctor uninstalled."

@@ -26,7 +26,7 @@ if [ "$1" = "uninstall" ]; then
   [ -x "$DEST/roamctl" ] && "$DEST/roamctl" stop 2>/dev/null
   cru d "$CRU_ID" 2>/dev/null
   [ -f "$SS" ] && sed -i '/roamctl boot/d; /roam-detect-wd/d' "$SS"
-  rm -f "$DEST/roam-detect.sh" "$DEST/roam-events.sh" "$DEST/roamctl" "$DEST/roam-detect.policy" "$DEST/roam-detect.flush" "$DEST/roam-detect.conf" /tmp/roam-detect.disabled /tmp/roam-detect.update.sh
+  rm -f "$DEST/roam-detect.sh" "$DEST/roam-events.sh" "$DEST/roam-lib.sh" "$DEST/roamctl" "$DEST/roam-detect.policy" "$DEST/roam-detect.flush" "$DEST/roam-detect.conf" /tmp/roam-detect.disabled /tmp/roam-detect.update.sh
   rm -rf /tmp/roam-detect
   echo "flowcache-doctor uninstalled."
   exit 0
@@ -39,7 +39,7 @@ FRESH=0
 
 # Fetch scripts (prefer local copies when run from a checkout)
 mkdir -p "$DEST"
-for f in roam-detect.sh roam-events.sh roamctl; do
+for f in roam-detect.sh roam-events.sh roam-lib.sh roamctl; do
   if [ -f "./scripts/$f" ]; then
     cp "./scripts/$f" "$DEST/$f"
   else
@@ -72,9 +72,10 @@ Installed and HEALING (per-client flushes on roam events, rate-limited —
 never a global flush). Restarts on crash (60s watchdog), survives reboots.
 The event listener runs automatically when your firmware provides
 /jffs/wifi_wlc.log; otherwise the 2s poller covers everything.
-If your SSIDs don't live on wl0.1/wl1.1/wl2.1, set BSSLIST in
-/jffs/scripts/roam-detect.conf (list bridge members with:
-ls /sys/class/net/br0/brif/).
+Watched interfaces are AUTO-DETECTED (works on routers and AiMesh nodes;
+the health check above shows what was resolved, and changes to your
+Wi-Fi networks are picked up automatically within ~2 minutes). To pin an
+explicit list instead, set BSSLIST="..." in /jffs/scripts/roam-detect.conf.
 
 Useful commands:
   /jffs/scripts/roamctl log         # what it has detected and healed

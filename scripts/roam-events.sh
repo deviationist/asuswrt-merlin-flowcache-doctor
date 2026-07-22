@@ -19,6 +19,7 @@ BSSLIST="auto"  # "auto" = resolve via roam-lib.sh; or an explicit list
 COOLDOWN=60
 MIN_GAP=8
 HEAL_TRIGGERS="roam stale-fdb dual-settle departure"   # keep default in sync with roam-detect.sh
+SETTLE_FLUSHES="20 60 300 600"  # keep default in sync with roam-detect.sh (ladder drained by the poller)
 TAG=roam-events
 STATE=/tmp/roam-detect
 FLUSHFLAG=/jffs/scripts/roam-detect.flush
@@ -74,6 +75,9 @@ heal() { # $1 = mac, $2 = reason, $3 = current bss, $4 = "force" bypasses same-r
   if [ -f "$FLUSHFLAG" ]; then
     fcctl flush --mac "$1" >/dev/null 2>&1
     logger -t "$TAG" "FLUSHED $1 ($2)"
+    # Schedule the settle-flush ladder (the POLLER drains it — this listener
+    # only writes the marker; a newer heal overwrites it, restarting the ladder).
+    [ -n "$SETTLE_FLUSHES" ] && echo "$1|$now|$3|$SETTLE_FLUSHES" > "$STATE/$key.settle"
   else
     logger -t "$TAG" "WOULD FLUSH $1 ($2) — enable with: roamctl flush on"
   fi

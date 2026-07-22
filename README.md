@@ -475,6 +475,7 @@ INTERVAL=2                   # seconds between detection passes
 COOLDOWN=60                  # min seconds between flushes per client (same radio)
 MIN_GAP=8                    # hard floor between flushes per client (any radio)
 HEAL_TRIGGERS="roam stale-fdb dual-settle departure"   # which triggers may flush
+SETTLE_FLUSHES="20 60 300 600"   # follow-up flush offsets (s) after each heal; "" disables
 LOG_EVENTS=1                 # 0 = quiet mode: log only actions (FLUSHED) + lifecycle
 EVENT_HEAL=1                 # 0 = disable the wlceventd event listener (poller only)
 ```
@@ -512,6 +513,24 @@ reappearing on any local radio (a mesh roam to another AiMesh unit — or a
 plain disconnect, where the flush is harmless). Default: all four. A conservative setup that only ever
 flushes on *proven* corruption would be `HEAL_TRIGGERS="stale-fdb"` — at the
 cost of eating the blackhole classes the preventive triggers exist for.
+
+`SETTLE_FLUSHES` (v0.3.1) is the answer to a nastier variant observed in
+the field ([issue #4](https://github.com/deviationist/asuswrt-merlin-flowcache-doctor/issues/4)):
+a heal can fire *on time* and the client still ends up blackholed, because
+the flush landed while the driver's station state was still settling — the
+client's persistent connections (file sync, SSH, SMB) immediately re-learn
+flow entries whose hardware templates bake in the stale station binding.
+Those poisoned entries then **never expire**: both endpoints keep
+retransmitting, so the flows never go idle, and everything the doctor
+watches (assoclist, FDB, even the flow-cache metadata) looks perfectly
+healthy. The settle ladder closes it blind: after every heal, the same
+client is re-flushed at each listed offset (default 20 s, 1 min, 5 min,
+10 min after the heal). On a clean roam the extra flushes are harmless
+no-ops (a per-client flush costs milliseconds of software-path fallback
+while flows re-learn); on a poisoned one, the first rung past the
+settling window cures it. A new roam mid-ladder restarts the ladder, and
+a client that departed to another AiMesh unit still gets its rungs on the
+unit it left — where its stale entries actually live.
 
 Restart after editing: `/jffs/scripts/roamctl restart`. `BSSLIST` is the one
 most people need (per-model interface names); the timing knobs are for the

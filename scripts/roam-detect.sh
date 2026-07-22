@@ -18,6 +18,10 @@ INTERVAL=2      # seconds between detection passes
 COOLDOWN=60     # min seconds between flushes per client (same radio)
 MIN_GAP=8       # hard floor between flushes per client (any radio)
 HEAL_TRIGGERS="roam stale-fdb dual-settle departure"   # which triggers may flush (detection always logs all)
+SETTLE_FLUSHES="20 60 300 600"  # follow-up flush offsets (s) after each heal; "" disables. A heal can land while
+                                # the driver's station state is still settling — persistent connections then re-bake
+                                # poisoned HW templates that never idle out (self-sustaining blackhole, field
+                                # incident 2026-07-22, issue #4). The ladder re-flushes after things settle.
 LOG_EVENTS=1    # 1 = log observations (ROAM/DUAL/SETTLED/STALE/RECOVERED); 0 = log only actions (FLUSHED) + lifecycle
 EVENT_HEAL=1    # 1 = run the wlceventd event listener too when the firmware provides its log; 0 = poller only
 TAG=roam-detect
@@ -77,6 +81,9 @@ heal() { # $1 = mac, $2 = reason, $3 = current bss, $4 = "force" bypasses same-r
   if [ -f "$FLUSHFLAG" ]; then
     fcctl flush --mac "$1" >/dev/null 2>&1
     logger -t "$TAG" "FLUSHED $1 ($2)"
+    # Schedule the settle-flush ladder (drained by the poller; a newer heal
+    # overwrites the marker, restarting the ladder — last heal wins).
+    [ -n "$SETTLE_FLUSHES" ] && echo "$1|$now|$3|$SETTLE_FLUSHES" > "$STATE/$key.settle"
   else
     logger -t "$TAG" "WOULD FLUSH $1 ($2) — enable with: roamctl flush on"
   fi
@@ -142,6 +149,30 @@ while true; do
       heal "$mac" "deferred: $preason" "${pbss:-$bss}" force
     fi
     echo "$bss $status" > "$f"
+  done
+
+  # Drain the settle-flush ladders. Iterates marker files, NOT the assoclist:
+  # a departed client (mesh roam to another unit) still gets its rungs here —
+  # its poisoned entries live on THIS unit. Direct flush path (not heal()):
+  # no cooldown gate and no re-scheduling, but MIN_GAP still floors the rate
+  # (an in-floor rung just waits for the next 2 s pass) and the shared
+  # lastflush state is updated so the heal gates see settle flushes too.
+  for sf in "$STATE"/*.settle; do
+    [ -f "$sf" ] || continue
+    [ -f "$FLUSHFLAG" ] || { rm -f "$sf"; continue; }   # flush turned off mid-ladder
+    IFS='|' read smac sbase sbss srungs < "$sf"
+    first=${srungs%% *}
+    [ -z "$first" ] && { rm -f "$sf"; continue; }
+    now=$(date +%s)
+    [ $((now - sbase)) -ge "$first" ] || continue
+    skey=$(echo "$smac" | tr -d :)
+    slast=0; [ -f "$STATE/$skey.lastflush" ] && slast=$(cat "$STATE/$skey.lastflush")
+    [ $((now - slast)) -lt "$MIN_GAP" ] && continue
+    rest=""; [ "$srungs" != "$first" ] && rest=${srungs#* }
+    if [ -n "$rest" ]; then echo "$smac|$sbase|$sbss|$rest" > "$sf"; else rm -f "$sf"; fi
+    echo "$now" > "$STATE/$skey.lastflush"; echo "$sbss" > "$STATE/$skey.lastflushbss"
+    fcctl flush --mac "$smac" >/dev/null 2>&1
+    logger -t "$TAG" "SETTLE-FLUSHED $smac (+${first}s after heal on $sbss)"
   done
   sleep $INTERVAL
 done

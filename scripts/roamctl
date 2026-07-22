@@ -3,7 +3,7 @@
 # Provides systemd-like lifecycle on Asuswrt-Merlin: boot start, crash
 # watchdog (via cru/cron), manual stop that disarms the watchdog, and a
 # persistent on/off policy.
-VERSION=0.3.0
+VERSION=0.3.1
 DAEMON=/jffs/scripts/roam-detect.sh
 EVDAEMON=/jffs/scripts/roam-events.sh    # wlceventd event listener (default-on when the event log exists)
 CONF=/jffs/scripts/roam-detect.conf

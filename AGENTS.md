@@ -94,6 +94,19 @@ editing anything.
 - **DUAL guard**: clients listed in two radios' assoclists simultaneously
   are parked, not acted on. Acting on ambiguous membership caused log spam
   and would cause flush churn.
+- **Settle-flush ladder** (v0.3.1, issue #4): a heal that lands while the
+  driver's station state is still settling can be followed by re-poisoned
+  flow entries that never idle out (persistent connections keep them hit —
+  a self-sustaining blackhole invisible to assoclist/FDB/l2list, observed
+  live 2026-07-22). Every real flush therefore schedules `$key.settle`
+  (`mac|base|bss|remaining_offsets`, from `SETTLE_FLUSHES`); **only the
+  poller drains it** (direct flush path — no heal() recursion, no
+  re-scheduling; `MIN_GAP` still floors the rate; updates the shared
+  lastflush state; markers are dropped if auto-flush is off). Both heal()
+  copies write the marker — part of the heal()-sync rule. The drain
+  iterates marker files, NOT the assoclist, so departed clients still get
+  their rungs on the unit they left. Don't convert the ladder into
+  detection — the incident class has no observable signature.
 - **Every artifact is inventoried** (see README's manual-install table) and
   **all three uninstall paths** (`roamctl uninstall`, `uninstall.sh`,
   `install.sh uninstall`) must remove every artifact, including any new one
